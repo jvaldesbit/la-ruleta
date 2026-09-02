@@ -1,0 +1,14 @@
+{
+  "name": "La Ruleta",
+  "short_name": "La Ruleta",
+  "description": "Mesa de ruleta: pon tus fichas, gira y cobra.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#041b12",
+  "theme_color": "#06251a",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "/favicon-32.png", "type": "image/png", "sizes": "32x32" },
+    { "src": "/apple-touch-icon.png", "type": "image/png", "sizes": "180x180" }
+  ]
+}

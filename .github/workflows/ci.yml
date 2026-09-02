@@ -1,0 +1,225 @@
+# ---------------------------------------------------------------------------
+# CI/CD de La Ruleta.
+#
+#   lint + tests  ->  build & push a GHCR  ->  deploy en Dokploy
+#
+# El repo es público: runners y GHCR salen gratis, así que no hace falta
+# escatimar jobs ni compartir un único runner para todo.
+# ---------------------------------------------------------------------------
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    # Anchor YAML para no repetir la lista en los dos triggers: un cambio en
+    # la documentación o en las specs no justifica gastar minutos de runner ni
+    # publicar una imagen nueva.
+    paths-ignore: &paths_ignore
+      - "**.md"
+      - "specs/**"
+      - ".specify/**"
+      - ".claude/**"
+  pull_request:
+    paths-ignore: *paths_ignore
+
+# Cancelar corridas obsoletas solo tiene sentido en pull requests, donde cada
+# push nuevo invalida al anterior. En push a main o en un tag NUNCA se cancela:
+# una corrida a medias podría dejar GHCR con la imagen subida pero el deploy
+# sin disparar, o abortar un deploy ya empezado.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: jvaldesbit
+
+jobs:
+  # ------------------------------------------------------------- backend --
+  backend:
+    name: Backend (lint + tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          # La caché de uv se guarda entre corridas usando uv.lock como clave;
+          # una instalación limpia de FastAPI y compañía tarda bastante más.
+          enable-cache: true
+          cache-dependency-glob: "backend/uv.lock"
+
+      - name: Sincronizar dependencias
+        run: uv sync --extra dev
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: Ruff (formato)
+        # --check no reescribe nada: falla si el formato no es el canónico, que
+        # es justo lo que se quiere en CI.
+        run: uv run ruff format --check .
+
+      - name: Pytest
+        run: uv run pytest -q
+
+  # ------------------------------------------------------------ frontend --
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm antes que setup-node: setup-node necesita encontrar el binario de
+      # pnpm para poder configurar su caché.
+      # `package_json_file` apuntando a frontend/: la acción lee de ahí el campo
+      # `packageManager` para saber qué versión de pnpm instalar, y en la raíz de
+      # este monorepo no hay package.json que leer.
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Instalar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: ESLint
+        run: pnpm run lint
+
+      # El build hace también `tsc -b`, así que aquí se comprueban los tipos.
+      - name: Build
+        run: pnpm run build
+
+  # ------------------------------------------------------- build & push --
+  build-and-push:
+    name: Publicar imagen (${{ matrix.name }})
+    needs: [backend, frontend]
+    # Nada de publicar desde un pull request: los forks no tendrían permiso y
+    # además ensuciaría el registry con imágenes de ramas que no existen.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # Si falla una imagen, la otra termina igual: así se ve de un vistazo si
+      # el problema es del backend, del frontend o de los dos.
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            context: ./backend
+          - name: web
+            context: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login en GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # GITHUB_TOKEN basta gracias a `packages: write`; no hace falta
+          # crear ni rotar un PAT.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Metadatos de la imagen
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/la-ruleta-${{ matrix.name }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+            type=sha,format=long
+
+      - name: Marca de tiempo del build
+        id: buildtime
+        run: echo "value=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
+      - name: Construir y publicar
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            RELEASE_VERSION=${{ github.ref_type == 'tag' && github.ref_name || format('main-{0}', github.sha) }}
+            GIT_REVISION=${{ github.sha }}
+            BUILD_TIME=${{ steps.buildtime.outputs.value }}
+          # Caché de capas en el almacén de GitHub Actions: sin esto cada push
+          # reinstala dependencias de Python y de Node desde cero.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+
+  # ------------------------------------------------------------- deploy --
+  deploy:
+    name: Desplegar en Dokploy
+    needs: [build-and-push]
+    # Solo main llega al entorno desplegado; los tags publican imagen pero no
+    # tocan producción.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      # Los secretos de Dokploy pueden no existir todavía (el recurso se crea a
+      # mano en la UI y solo entonces hay composeId). Mientras falten, el job
+      # avisa y termina en verde en lugar de teñir de rojo un push correcto.
+      - name: Comprobar secretos
+        id: check
+        env:
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_TOKEN: ${{ secrets.DOKPLOY_AUTH_TOKEN }}
+          COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+        run: |
+          if [ -n "$DOKPLOY_URL" ] && [ -n "$DOKPLOY_TOKEN" ] && [ -n "$COMPOSE_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Faltan secretos de Dokploy (DOKPLOY_URL, DOKPLOY_AUTH_TOKEN, DOKPLOY_COMPOSE_ID); se omite el despliegue. Ver docs/DEPLOY.md."
+          fi
+
+      # curl directo contra la API de Dokploy en vez de una acción de terceros:
+      # es una única petición HTTP y así no se depende de un tercero con acceso
+      # al token de despliegue.
+      - name: Disparar despliegue
+        if: steps.check.outputs.ready == 'true'
+        env:
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_TOKEN: ${{ secrets.DOKPLOY_AUTH_TOKEN }}
+          COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+        run: |
+          curl -fsS -X POST "$DOKPLOY_URL/api/compose.deploy" \
+            -H "x-api-key: $DOKPLOY_TOKEN" \
+            -H "content-type: application/json" \
+            -d "{\"composeId\":\"$COMPOSE_ID\"}"
+
+          # Si el recurso se hubiera creado en Dokploy como Application en vez
+          # de como Compose, el endpoint y el cuerpo serían estos (y el secreto
+          # a usar, DOKPLOY_APPLICATION_ID):
+          #
+          # curl -fsS -X POST "$DOKPLOY_URL/api/application.deploy" \
+          #   -H "x-api-key: $DOKPLOY_TOKEN" \
+          #   -H "content-type: application/json" \
+          #   -d "{\"applicationId\":\"$APPLICATION_ID\"}"

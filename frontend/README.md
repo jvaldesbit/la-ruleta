@@ -62,10 +62,31 @@ src/
 `docs/API_CONTRACT.md`, en la raíz del repositorio, es la fuente de verdad del
 backend; los tipos de `src/api/types.ts` lo reflejan uno a uno.
 
+## Decisiones visuales
+
+La pantalla es la mesa vista desde arriba bajo el foco, no un panel de tarjetas
+con una ruleta dentro: se apuesta poniendo fichas sobre el tapete. De ahí salen
+el resto de decisiones. Tapete verde con viñeta y luz cálida centrada; latón y
+oro para filetes, cifras y la barra de apostar; rojo y negro laca en las
+casillas; hueso para el dato. Bodoni Moda de rótulo contra Archivo de dato, con
+cifras tabulares para que las columnas de dinero cuadren.
+
+La rueda es un SVG propio con sus 37 casillas en orden natural 0..36: con la
+regla de paridad los colores quedan alternos y la regla se ve sin leerla, y el
+empalme 36-0 deja dos rojas juntas, que es justo donde el enunciado se aparta de
+la ruleta real. Las fichas son gradientes cónicos con máscara, no imágenes. No
+hay librerías de interfaz ni iconos de terceros: los iconos son SVG dibujados a
+un solo grosor de trazo.
+
+El texto explicativo se redujo a lo mínimo: la regla de paridad vive tras el
+icono de información del pie, y el botón de apostar dice siempre lo que hace,
+con el motivo por el que no se puede en una línea aparte.
+
 ## Accesibilidad y movimiento
 
 Todos los controles son elementos nativos enfocables con foco visible, las
 casillas del tapete son botones con `aria-pressed` y la rueda expone el
 resultado como texto. Con `prefers-reduced-motion` se desactivan el giro, el
 rebote de las fichas, el contador y el destello: la rueda se coloca
-directamente sobre el número ganador.
+directamente sobre el número ganador. El sonido es cosa aparte: se controla con
+su propio interruptor, no con `prefers-reduced-motion`.

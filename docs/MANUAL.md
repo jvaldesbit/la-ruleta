@@ -29,8 +29,9 @@ Al lado del campo hay dos indicadores más:
 - Un **punto redondo** que informa de la conexión con el servidor: verde cuando
   la mesa responde, rojo cuando no hay conexión, y parpadeando en dorado
   mientras lo comprueba. Si está rojo, ninguna acción va a funcionar.
-- Un **altavoz** para encender o apagar el sonido de la mesa. Su estado también
-  se guarda en el navegador.
+- Un **altavoz** para encender o apagar el sonido de la mesa. Su estado se
+  guarda en el navegador, así que si lo apagas seguirá apagado la próxima vez
+  que entres.
 
 ## 2. Abrir la mesa
 
@@ -149,6 +150,23 @@ Si el servidor rechaza algo por su cuenta, el motivo aparece **tal cual lo
 manda**, en rojo bajo el botón dorado si es un problema con la apuesta, o en un
 aviso al pie de la pantalla en los demás casos. Nunca vas a ver una ventana
 emergente del navegador.
+
+## 8. El sonido de la mesa
+
+La mesa suena en cuatro momentos:
+
+- Al **poner una ficha** en el carril, un golpe seco, distinto cada vez.
+- Al **confirmar la apuesta**, un doble toque de latón.
+- Al **girar**, el zumbido de la rueda, que baja de tono según pierde fuelle.
+- Al **resolverse**, la frenada y luego un remate corto: ascendente si tu
+  apuesta ganó, descendente si perdió.
+
+Todo se genera en el propio navegador, no son archivos descargados. Se apaga y
+se enciende con el **altavoz** de arriba a la derecha.
+
+Dos detalles: **no suena nada hasta que tocas algo** por primera vez, porque los
+navegadores no permiten que una página empiece a sonar sola; y el volumen es
+bajo a propósito, para acompañar y no molestar.
 
 ---
 

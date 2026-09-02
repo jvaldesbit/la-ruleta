@@ -12,6 +12,7 @@ interface TableRailProps {
   selectedId: string | null
   loading: boolean
   busyId: string | null
+  spinning: boolean
   onSelect: (id: string) => void
   onCreate: () => void
   onOpen: (id: string) => void
@@ -23,23 +24,23 @@ export function TableRail({
   selectedId,
   loading,
   busyId,
+  spinning,
   onSelect,
   onCreate,
   onOpen,
   onClose,
 }: TableRailProps) {
   const selected = roulettes.find((roulette) => roulette.id === selectedId) ?? null
-  const busy = selected !== null && selected.id === busyId
+  const busy = spinning || (selected !== null && selected.id === busyId)
 
   return (
     <div className="tables">
-      <div className="tables__rail" role="tablist" aria-label="Mesas">
+      <div className="tables__rail" role="group" aria-label="Mesas">
         {roulettes.map((roulette, index) => (
           <button
             key={roulette.id}
             type="button"
-            role="tab"
-            aria-selected={roulette.id === selectedId}
+            aria-pressed={roulette.id === selectedId}
             className={`plaque plaque--${roulette.status}${roulette.id === selectedId ? ' is-active' : ''}`}
             title={`Mesa ${roulette.id} · ${STATE_LABEL[roulette.status]}`}
             onClick={() => {
@@ -58,7 +59,7 @@ export function TableRail({
       </div>
 
       <div className="tables__actions">
-        {selected !== null && selected.status === 'created' ? (
+        {selected !== null && selected.status === 'created' && !spinning ? (
           <button
             type="button"
             className="action action--open"
@@ -71,7 +72,7 @@ export function TableRail({
             {busy ? 'Abriendo…' : 'Abrir mesa'}
           </button>
         ) : null}
-        {selected !== null && selected.status === 'open' ? (
+        {selected !== null && (selected.status === 'open' || spinning) ? (
           <button
             type="button"
             className="action action--spin"
@@ -84,7 +85,7 @@ export function TableRail({
             {busy ? 'Girando…' : 'Girar'}
           </button>
         ) : null}
-        {selected !== null && selected.status === 'closed' ? (
+        {selected !== null && selected.status === 'closed' && !spinning ? (
           <button type="button" className="action action--new" onClick={onCreate}>
             <Icon name="plus" size={17} />
             Mesa nueva

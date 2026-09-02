@@ -10,9 +10,14 @@ interface ScoreboardProps {
 }
 
 export function Scoreboard({ result, revealed }: ScoreboardProps) {
-  // El marcador se monta al frenar la rueda: así el contador arranca en ese momento.
-  if (!revealed) return null
-  return <Board result={result} />
+  // La región viva existe desde el principio para que el lector de pantalla
+  // anuncie el resultado; el marcador entra dentro al frenar la rueda, que es
+  // cuando debe arrancar el contador.
+  return (
+    <div className="board-slot" aria-live="polite">
+      {revealed ? <Board result={result} /> : null}
+    </div>
+  )
 }
 
 function Board({ result }: { result: CloseRouletteResponse }) {
@@ -20,7 +25,7 @@ function Board({ result }: { result: CloseRouletteResponse }) {
   const playersNet = result.total_amount_paid - result.total_amount_bet
 
   return (
-    <section className="board" aria-live="polite">
+    <section className="board">
       <div className="board__totals">
         <p className="board__stat">
           <span className="board__stat-label">Apostado</span>

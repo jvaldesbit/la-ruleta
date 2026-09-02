@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { BetColor } from '../api/types'
 import { colorOfNumber } from '../lib/roulette'
 import { SECTOR_ANGLE, WHEEL_NUMBERS, angleForNumber, polar, sectorPath } from '../lib/wheel'
@@ -7,13 +7,16 @@ const OUTER = 150
 const RIM = 138
 const POCKET_OUT = 132
 const POCKET_IN = 96
-const HUB = 62
+const HUB = 52
 const SPIN_MS = 4200
 const TURNS = 6
+const BALL_TURNS = 11
 
 interface Phase {
   token: string | null
   angle: number
+  /** Vueltas de la bola: siempre múltiplo de 360 para que frene bajo la flecha. */
+  ballAngle: number
   moving: boolean
   settled: boolean
 }
@@ -33,20 +36,29 @@ function reducedMotion(): boolean {
 }
 
 export function Wheel({ winning, spinToken, animate, onSettled }: WheelProps) {
-  const [phase, setPhase] = useState<Phase>({ token: null, angle: 0, moving: false, settled: false })
+  const [phase, setPhase] = useState<Phase>({
+    token: null,
+    angle: 0,
+    ballAngle: 0,
+    moving: false,
+    settled: false,
+  })
 
   // Ajuste de estado en render cuando cambia el sorteo (no en un efecto):
   // https://react.dev/learn/you-might-not-need-an-effect
   if (phase.token !== spinToken) {
     if (spinToken === null || winning === null) {
-      setPhase({ token: spinToken, angle: phase.angle, moving: false, settled: false })
+      setPhase({ ...phase, token: spinToken, moving: false, settled: false })
     } else if (!animate || reducedMotion()) {
-      setPhase({ token: spinToken, angle: angleForNumber(winning), moving: false, settled: true })
+      setPhase({ ...phase, token: spinToken, angle: angleForNumber(winning), moving: false, settled: true })
     } else {
       const base = Math.ceil(phase.angle / 360) * 360
       setPhase({
         token: spinToken,
         angle: base + TURNS * 360 + angleForNumber(winning),
+        // La bola gira al revés un número entero de vueltas: acaba justo en la
+        // flecha, es decir dentro de la casilla ganadora.
+        ballAngle: phase.ballAngle - BALL_TURNS * 360,
         moving: true,
         settled: false,
       })
@@ -63,17 +75,21 @@ export function Wheel({ winning, spinToken, animate, onSettled }: WheelProps) {
     }
   }, [phase.moving, phase.token])
 
+  // Se avisa una sola vez por sorteo, aunque cambie la identidad del callback.
+  const notified = useRef<string | null>(null)
   useEffect(() => {
-    if (phase.settled) onSettled?.()
+    if (!phase.settled || notified.current === phase.token) return
+    notified.current = phase.token
+    onSettled?.()
   }, [phase.settled, phase.token, onSettled])
 
-  const { angle, moving, settled } = phase
+  const { angle, ballAngle, moving, settled } = phase
 
   const easing = `transform ${String(SPIN_MS)}ms cubic-bezier(0.13, 0.72, 0.06, 1)`
   const spinStyle = { transform: `rotate(${String(angle)}deg)`, transition: moving ? easing : 'none' }
   const ballStyle = {
-    transform: `rotate(${String(-angle * 1.55)}deg)`,
-    transition: moving ? easing : 'none',
+    transform: `rotate(${String(ballAngle)}deg)`,
+    transition: moving ? `transform ${String(SPIN_MS)}ms cubic-bezier(0.1, 0.66, 0.05, 1)` : 'none',
   }
 
   const label =
@@ -83,6 +99,7 @@ export function Wheel({ winning, spinToken, animate, onSettled }: WheelProps) {
 
   return (
     <div className={`wheel${moving ? ' is-spinning' : ''}${settled ? ' is-settled' : ''}`}>
+      <div className="wheel__face">
       <svg viewBox="-160 -160 320 320" className="wheel__svg" role="img" aria-label={label}>
         <defs>
           <radialGradient id="wheelBrass" cx="38%" cy="30%">
@@ -159,10 +176,14 @@ export function Wheel({ winning, spinToken, animate, onSettled }: WheelProps) {
           <path d="M12 30 2 4a12 12 0 0 1 20 0Z" fill="url(#pointerBrass)" stroke="#3d2a08" strokeWidth="1.2" />
         </svg>
       </div>
+      </div>
 
       {winning !== null && settled ? (
         <p className={`wheel__result wheel__result--${colorOfNumber(winning)}`}>
           <span className="wheel__result-number">{winning}</span>
+          <span className="wheel__result-color">
+            {colorOfNumber(winning) === 'red' ? 'Rojo' : 'Negro'}
+          </span>
         </p>
       ) : null}
     </div>

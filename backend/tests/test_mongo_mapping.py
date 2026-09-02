@@ -73,17 +73,20 @@ def test_ping_es_falso_si_mongo_no_responde() -> None:
     assert backend == "mongo"
 
 
-def test_health_reporta_degraded_si_el_almacenamiento_no_responde() -> None:
-    with TestClient(create_app(repository=_RepositorioCaido())) as test_client:
-        body = test_client.get("/api/v1/health").json()
-    assert body["status"] == "degraded"
-    assert body["storage"] == "mongo"
+def test_health_responde_503_si_mongo_no_responde() -> None:
+    # Repositorio Mongo real apuntando a un puerto muerto: la app arranca igual
+    # (los índices fallan con aviso) y el healthcheck lo denuncia con un 503.
+    client = AsyncIOMotorClient("mongodb://127.0.0.1:1", serverSelectionTimeoutMS=200)
+    with TestClient(create_app(repository=MongoRouletteRepository(client, "ruleta_test"))) as tc:
+        response = tc.get("/api/v1/health")
+    assert response.status_code == 503
+    assert response.json()["status"] == "degraded"
+    assert response.json()["storage"] == "mongo"
 
 
-class _RepositorioCaido(InMemoryRouletteRepository):
-    """Doble de prueba: se comporta como Mongo caído para el healthcheck."""
-
-    backend = "mongo"
-
-    async def ping(self) -> bool:
-        return False
+def test_health_con_memoria_siempre_responde_200() -> None:
+    with TestClient(create_app(repository=InMemoryRouletteRepository())) as test_client:
+        response = test_client.get("/api/v1/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    assert response.json()["storage"] == "memory"

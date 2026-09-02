@@ -1,6 +1,6 @@
 """Routers de la API v1."""
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Response, status
 
 from ..config import get_settings
 from ..domain import BetType
@@ -23,9 +23,19 @@ _NOT_FOUND = {404: {"model": ErrorResponse}}
 _CONFLICT = {409: {"model": ErrorResponse}}
 
 
-@router.get("/health", response_model=HealthResponse, tags=["health"])
-async def health(repository: RepositoryDep) -> HealthResponse:
+@router.get(
+    "/health",
+    response_model=HealthResponse,
+    responses={503: {"model": HealthResponse}},
+    tags=["health"],
+)
+async def health(repository: RepositoryDep, response: Response) -> HealthResponse:
+    # 503 y no 200: lo consultan el healthcheck del contenedor y el proxy, y una
+    # API que no alcanza su almacén no puede atender apuestas; con 200 se le
+    # seguiría mandando tráfico. Con el almacén en memoria nunca se degrada.
     alive = await repository.ping()
+    if not alive:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return HealthResponse(
         status="ok" if alive else "degraded",
         version=get_settings().app_version,

@@ -43,8 +43,16 @@ y lo avisa por log (los datos se pierden al reiniciar el proceso).
   `created_at` se crean en el arranque (lifespan). Abrir, apostar y cerrar usan
   actualizaciones condicionadas al estado esperado, así que son atómicas ante
   peticiones concurrentes.
-- `GET /api/v1/health` informa del backend en uso: `{"status":"ok","version":"...","storage":"memory|mongo"}`.
-  Con Mongo hace un ping; si no responde, `status` pasa a `degraded`.
+- `GET /api/v1/health` informa del backend en uso: 200 con
+  `{"status":"ok","version":"...","storage":"memory|mongo"}`. Con Mongo hace un
+  ping y, si no responde, devuelve **503** con `status: "degraded"`: lo consultan
+  el healthcheck del contenedor y el proxy, y una API que no alcanza su base de
+  datos no debe seguir recibiendo tráfico. Con almacén en memoria no hay 503
+  posible, porque no hay nada externo que pueda caerse.
+
+> Deuda técnica conocida: `motor` está deprecado en favor del driver asíncrono
+> incluido en `pymongo`. La migración se limita a `repositories/mongo.py`; el
+> resto del código no toca el driver.
 
 ### MongoDB en local con podman
 

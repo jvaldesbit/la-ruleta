@@ -1,5 +1,6 @@
 """Implementación del repositorio sobre MongoDB con motor."""
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -20,6 +21,8 @@ from ..domain import (
     RouletteNotFoundError,
     RouletteStatus,
 )
+
+logger = logging.getLogger("ruleta.repositories.mongo")
 
 COLLECTION_NAME = "roulettes"
 
@@ -132,9 +135,17 @@ class MongoRouletteRepository:
         self._collection: AsyncIOMotorCollection = client[database][COLLECTION_NAME]
 
     async def startup(self) -> None:
-        """Crea los índices una sola vez, al arrancar la app, nunca por petición."""
-        await self._collection.create_index([("status", ASCENDING)], name="status_idx")
-        await self._collection.create_index([("created_at", ASCENDING)], name="created_at_idx")
+        """Crea los índices una sola vez, al arrancar la app, nunca por petición.
+
+        Si Mongo no está disponible el arranque no se aborta: la app queda en pie
+        respondiendo 503 en `/health` hasta que la base vuelva, en vez de entrar
+        en un ciclo de reinicios en el que nadie puede consultar su estado.
+        """
+        try:
+            await self._collection.create_index([("status", ASCENDING)], name="status_idx")
+            await self._collection.create_index([("created_at", ASCENDING)], name="created_at_idx")
+        except PyMongoError:
+            logger.exception("No se pudieron crear los índices de '%s'", COLLECTION_NAME)
 
     async def shutdown(self) -> None:
         self._client.close()
@@ -185,9 +196,12 @@ class MongoRouletteRepository:
                 raise RouletteNotFoundError(roulette_id)
             roulette = roulette_from_document(doc)
             roulette.close(winning_number)
-            # Concurrencia optimista: el reemplazo solo se aplica si la ruleta
-            # sigue abierta y con las mismas apuestas que se acaban de liquidar,
-            # así ni se cierra dos veces ni se pierde una apuesta de última hora.
+            # Concurrencia optimista. El filtro por `status` evita el doble
+            # cierre, y la guarda por `$size` NO sobra: los resultados que se
+            # escriben se calcularon sobre la lista de apuestas leída arriba, así
+            # que si entró una apuesta mientras se liquidaba, el reemplazo debe
+            # fallar y reintentarse; si no, esa apuesta quedaría sin resolver o
+            # se perdería al sobrescribir el documento.
             replaced = await self._collection.find_one_and_replace(
                 {
                     "_id": roulette_id,

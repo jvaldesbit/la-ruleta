@@ -56,7 +56,7 @@ Base path `/api/v1`. Detalle completo en [`docs/API_CONTRACT.md`](docs/API_CONTR
 | `POST` | `/api/v1/roulettes/{id}/close` | Cierra, sortea y resuelve todas las apuestas. |
 | `GET`  | `/api/v1/roulettes` | Lista las ruletas con su estado. |
 | `GET`  | `/api/v1/roulettes/{id}` | Detalle de una ruleta, con apuestas y resultados. |
-| `GET`  | `/api/v1/health` | Healthcheck. Lo usan Docker y Dokploy. |
+| `GET`  | `/api/v1/health` | Healthcheck. `200` con `status: ok`; `503` con `status: degraded` si Mongo no responde. |
 
 Cuerpos de apuesta aceptados:
 
@@ -138,7 +138,9 @@ Backend (Python 3.14 + [uv](https://docs.astral.sh/uv/)):
 cd backend
 uv sync --extra dev
 
-# Con MongoDB (levántalo aparte, p. ej. `podman run -d -p 27017:27017 docker.io/library/mongo:8`)
+# Con MongoDB levantado aparte:
+#   podman run -d -p 27017:27017 docker.io/library/mongo:8.2
+# (8.2 y no 8.0.x: las 8.0.x no arrancan en kernels 6.19+, fallo SERVER-121912)
 export MONGODB_URI="mongodb://localhost:27017"
 export MONGODB_DB="ruleta"
 
@@ -201,7 +203,7 @@ Es exactamente lo que ejecuta CI, así que si pasa en local pasa en el PR.
                           └──────────────────────────────┘  │
                                                             ▼
                           ┌──────────────────────────────┐
-                          │  mongo  (mongo:8)            │
+                          │  mongo  (mongo:8.2)          │
                           │  • local: servicio del compose│
                           │  • prod: instancia de Dokploy │
                           └──────────────────────────────┘

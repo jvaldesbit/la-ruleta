@@ -14,32 +14,37 @@ recurso, cómo recrearlo por API y la resolución de problemas— está en
 | --- | --- | --- |
 | Origen de las imágenes | `build:` desde el código local | `image:` desde GHCR |
 | Para qué | desarrollo en tu máquina (podman o Docker) | producción en Dokploy |
-| MongoDB | servicio `mongo` propio, con volumen local | la instancia que **ya existe** en Dokploy |
+| MongoDB | servicio `mongo` propio (`mongo:8.2`), con volumen local | la instancia compartida que **ya existe** en Dokploy |
 | Puertos publicados | `8000`, `8080` y `27017` | ninguno; entra Traefik |
 | Quién lo arranca | tú, con `podman compose up` | Dokploy, tras el push a `main` |
 
 ## Estado actual
 
-El recurso ya está creado **por API** (no a mano desde la interfaz):
+Está **desplegado y respondiendo**: `/api/v1/health` devuelve `storage: mongo`.
+El recurso se creó **por API**, no a mano desde la interfaz:
 
 - Proyecto `la-ruleta`, recurso de tipo **Compose** con provider **Raw**, cuyo
   contenido es una copia literal de `docker-compose.dokploy.yml`.
-- Imágenes públicas en GHCR: `ghcr.io/jvaldesbit/la-ruleta-api:latest` y
-  `…-web:latest`, con `pull_policy: always` en ambos servicios.
+- Imágenes en GHCR: `ghcr.io/jvaldesbit/la-ruleta-api:latest` y `…-web:latest`,
+  con `pull_policy: always` en ambos servicios. Salieron **públicas solas**,
+  heredando la visibilidad del repositorio, así que no hubo que registrar
+  credenciales del registro en Dokploy.
 - Dominio `ruleta.jcvb.com.co` apuntando al servicio **`web`**, puerto `80`,
-  HTTPS con Let's Encrypt. Un único dominio: nginx pasa `/api/` al backend.
+  HTTPS con Let's Encrypt. Un único dominio: nginx pasa `/api/` al backend. El
+  registro `A` está en Cloudflare **sin proxy** (nube gris): con el proxy
+  activado el desafío HTTP-01 no llega a Traefik y el certificado no se emite.
 - Variables de entorno del recurso:
 
   ```
-  MONGODB_URI=mongodb://<usuario>:<password>@<servicio-mongo>:27017/ruleta?authSource=admin
+  MONGODB_URI=mongodb://<usuario>:<password>@mongo-shared-vqyoql:27017/ruleta?authSource=admin
   MONGODB_DB=ruleta
   APP_ENV=production
   LOG_LEVEL=info
   ```
 
-- Secretos en GitHub (`DOKPLOY_URL`, `DOKPLOY_AUTH_TOKEN`,
-  `DOKPLOY_COMPOSE_ID`) para que cada push a `main` dispare
-  `POST /api/compose.deploy`.
+- Secretos ya puestos en GitHub (`DOKPLOY_URL`, `DOKPLOY_AUTH_TOKEN`,
+  `DOKPLOY_COMPOSE_ID`), así que cada push a `main` dispara
+  `POST /api/compose.deploy` y el job de deploy ya no se salta.
 
 Recrearlo por API, con los `curl` exactos: `../docs/DEPLOY.md`, sección 2.
 
@@ -52,7 +57,9 @@ Recrearlo por API, con los `curl` exactos: `../docs/DEPLOY.md`, sección 2.
   que ya corre en el Dokploy del usuario, con su propio volumen y su propio
   ciclo de vida. Declarar otra aquí crearía una segunda base vacía y confusa.
   La conexión llega como `${MONGODB_URI}`, interpolada desde el `.env` que
-  genera Dokploy, para que la credencial no viva en el repositorio.
+  genera Dokploy, apuntando al contenedor `mongo-shared-vqyoql` por nombre (no
+  por IP, que cambia en cada redespliegue), para que la credencial no viva en
+  el repositorio.
 - **`api` sin `ports`.** Solo `web` habla con la API, por la red interna de
   Compose (`http://api:8000`, ver `frontend/nginx.conf`). Publicar el 8000 en
   el host la dejaría accesible sin TLS y sin pasar por el proxy.

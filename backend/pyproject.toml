@@ -37,3 +37,6 @@ select = ["E", "F", "I", "UP", "B", "SIM", "N", "RUF"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=ruleta --cov-report=term-missing"
+markers = [
+    "mongo: requiere un MongoDB real; se salta si no hay MONGODB_TEST_URI en el entorno",
+]

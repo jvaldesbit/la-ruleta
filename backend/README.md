@@ -20,14 +20,43 @@ uv run uvicorn ruleta.main:app --reload --port 8000
 
 ## Variables de entorno
 
-| Variable          | Por defecto     | Descripción                                     |
-| ----------------- | --------------- | ----------------------------------------------- |
-| `APP_ENV`         | `development`   | Entorno de ejecución.                            |
-| `APP_VERSION`     | `0.1.0`         | Versión que devuelve `/health`.                  |
-| `HTTP_PORT`       | `8000`          | Puerto de escucha al arrancar con `python -m`.   |
-| `ALLOWED_ORIGINS` | `*`             | Orígenes CORS separados por comas.               |
+| Variable          | Por defecto   | Descripción                                              |
+| ----------------- | ------------- | -------------------------------------------------------- |
+| `APP_ENV`         | `development` | Entorno de ejecución.                                     |
+| `APP_VERSION`     | `0.1.0`       | Versión que devuelve `/health`.                           |
+| `HTTP_PORT`       | `8000`        | Puerto de escucha al arrancar con `python -m ruleta.main`.|
+| `ALLOWED_ORIGINS` | `*`           | Orígenes CORS separados por comas.                        |
+| `MONGODB_URI`     | *(vacío)*     | Si está definida se usa MongoDB; si no, memoria.          |
+| `MONGODB_DB`      | `ruleta`      | Base de datos de MongoDB.                                 |
 
-No hay secretos ni base de datos: el estado vive en memoria mientras corre el proceso.
+No hay secretos. Sin `MONGODB_URI` la app arranca igual con el almacén en memoria
+y lo avisa por log (los datos se pierden al reiniciar el proceso).
+
+## Persistencia
+
+- **Memoria** (por defecto): `InMemoryRouletteRepository`, un lock de asyncio
+  serializa las transiciones. Es lo que usan los tests y el desarrollo sin base de datos.
+- **MongoDB**: `MongoRouletteRepository` con `motor`. Una sola colección
+  `roulettes` guarda el documento completo con las **apuestas embebidas** (siempre
+  se leen y liquidan junto a su ruleta) y `_id` es el uuid de la ruleta. Los montos
+  se guardan como `Decimal128`, nunca como float. Los índices por `status` y
+  `created_at` se crean en el arranque (lifespan). Abrir, apostar y cerrar usan
+  actualizaciones condicionadas al estado esperado, así que son atómicas ante
+  peticiones concurrentes.
+- `GET /api/v1/health` informa del backend en uso: `{"status":"ok","version":"...","storage":"memory|mongo"}`.
+  Con Mongo hace un ping; si no responde, `status` pasa a `degraded`.
+
+### MongoDB en local con podman
+
+```bash
+podman run -d --name ruleta-mongo -p 27017:27017 docker.io/library/mongo:8
+export MONGODB_URI="mongodb://localhost:27017"
+export MONGODB_DB="ruleta"
+uv run uvicorn ruleta.main:app --reload --port 8000
+```
+
+> En kernels 6.19 o superiores, `mongo:8` (8.0.x) se niega a arrancar por una
+> incompatibilidad conocida (SERVER-121912); usa `docker.io/library/mongo:8.2`.
 
 ## Calidad
 
@@ -35,6 +64,17 @@ No hay secretos ni base de datos: el estado vive en memoria mientras corre el pr
 uv run ruff check . && uv run ruff format --check .
 uv run pytest -q
 ```
+
+Los tests de MongoDB están marcados con `mongo` y se **saltan** si no hay
+`MONGODB_TEST_URI` (es lo que ocurre hoy en CI, que solo ejecuta los de memoria):
+
+```bash
+podman run -d --name ruleta-mongo -p 27017:27017 docker.io/library/mongo:8
+MONGODB_TEST_URI="mongodb://localhost:27017" uv run pytest -q          # toda la suite
+MONGODB_TEST_URI="mongodb://localhost:27017" uv run pytest -q -m mongo # solo los de Mongo
+```
+
+Cada test de Mongo trabaja sobre una base efímera propia y la borra al terminar.
 
 ## Reglas de negocio
 
@@ -51,10 +91,11 @@ uv run pytest -q
 
 ```
 src/ruleta/
-  domain/        entidades y reglas puras (sin FastAPI ni pydantic)
-  repositories/  puerto RouletteRepository + implementación en memoria
+  domain/        entidades y reglas puras (sin FastAPI, pydantic ni driver)
+  repositories/  puerto RouletteRepository + adaptadores memoria y mongo
   api/           routers, esquemas, dependencias y manejo de errores
   service.py     casos de uso
+  storage.py     elige el repositorio según MONGODB_URI
   config.py      configuración por entorno
-  main.py        creación de la app y montaje en /api/v1
+  main.py        app, lifespan (índices) y montaje en /api/v1
 ```

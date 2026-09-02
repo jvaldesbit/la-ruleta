@@ -1,0 +1,151 @@
+# ---------------------------------------------------------------------------
+# La Ruleta — despliegue en Dokploy (https://cloud.kiware.co).
+# Dominio público: https://ruleta.jcvb.com.co
+#
+# Este fichero NO construye nada y NO levanta base de datos: se limita a
+# arrancar las imágenes que el workflow de GitHub Actions ya publicó en GHCR y
+# a conectarlas al MongoDB que ya existe en la instancia de Dokploy. El
+# servidor no tiene por qué compilar el frontend ni resolver dependencias de
+# Python; solo tira de imágenes y las levanta.
+#
+# El compose de desarrollo (docker-compose.yml en la raíz) sí construye y sí
+# incluye su propio Mongo, y por eso son dos ficheros separados en lugar de
+# uno con overrides.
+#
+# Cómo se usa: el recurso ya está creado en Dokploy como Compose de tipo
+# "Raw" con este contenido (se creó por API; ver docs/DEPLOY.md). Si hay que
+# recrearlo, se pega este fichero tal cual.
+# ---------------------------------------------------------------------------
+
+services:
+  # ------------------------------------------------------------------ API --
+  api:
+    image: ghcr.io/jvaldesbit/la-ruleta-api:latest
+
+    # IMPRESCINDIBLE. El tag :latest apunta a un digest distinto en cada push
+    # a main, pero Docker no vuelve a consultar el registry si ya tiene una
+    # imagen guardada con ese mismo tag. Sin pull_policy: always, Dokploy
+    # "despliega" una y otra vez la imagen vieja y el deploy parece que no
+    # hace nada. Es el fallo más habitual con tags móviles.
+    pull_policy: always
+
+    restart: unless-stopped
+
+    # Sin `ports`. La API no se publica en ninguna interfaz del host: solo la
+    # alcanza `web` a través de la red interna de Compose. Traefik (el proxy
+    # de Dokploy) entra por esa misma red y únicamente al servicio `web`, así
+    # que la API no queda expuesta a Internet.
+    expose:
+      - "8000"
+
+    # Dokploy escribe las variables que se configuran en su interfaz en un
+    # fichero .env junto al compose, pero NO las inyecta automáticamente en
+    # los servicios: hay que pedirlas explícitamente con env_file. Sin esto,
+    # todo lo que se rellene en la UI se ignora en silencio.
+    env_file:
+      - .env
+
+    environment:
+      # Aquí NO va la cadena de conexión escrita a mano: se referencia
+      # `${MONGODB_URI}`, que Compose sustituye leyendo ese mismo .env que
+      # Dokploy genera. Así la credencial vive solo en la interfaz de Dokploy
+      # y nunca en el repositorio.
+      #
+      # La instancia de MongoDB ya existe en este Dokploy y NO se declara como
+      # servicio aquí: se comparte con otros proyectos, tiene su propio
+      # volumen y su propio ciclo de vida. Levantar otra aquí crearía una
+      # segunda base de datos vacía y confusa.
+      #
+      # El valor a poner en Dokploy tiene la forma:
+      #   mongodb://<usuario>:<password>@<nombre-del-servicio-mongo>:27017/ruleta?authSource=admin
+      # donde <nombre-del-servicio-mongo> es el nombre del contenedor de Mongo
+      # dentro de dokploy-network (el que muestra Dokploy en el recurso de la
+      # base de datos), no una IP: las IPs cambian en cada redespliegue.
+      MONGODB_URI: ${MONGODB_URI}
+      MONGODB_DB: ${MONGODB_DB:-ruleta}
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    networks:
+      # `ruleta` para que `web` la alcance por nombre; `dokploy-network` para
+      # poder resolver el contenedor de MongoDB, que vive en esa red junto al
+      # resto de recursos de Dokploy. Si el Mongo estuviera en una red propia
+      # distinta, habría que añadirla aquí también como external.
+      - ruleta
+      - dokploy-network
+
+  # ------------------------------------------------------------------ WEB --
+  web:
+    image: ghcr.io/jvaldesbit/la-ruleta-web:latest
+
+    # Mismo motivo que arriba: sin esto el frontend se queda congelado en el
+    # bundle de un despliegue anterior.
+    pull_policy: always
+
+    restart: unless-stopped
+
+    # `expose` y no `ports`: quien publica el servicio hacia fuera es Traefik,
+    # que se conecta por la red de Docker y enruta ruleta.jcvb.com.co hacia
+    # este puerto 80. Publicar el puerto en el host sería saltarse el proxy y
+    # quedarse sin TLS.
+    #
+    # Hay un único dominio para todo: este servicio sirve el SPA y nginx hace
+    # de proxy de /api/ hacia `api:8000` (ver frontend/nginx.conf). La API no
+    # tiene dominio propio ni subdominio.
+    expose:
+      - "80"
+
+    env_file:
+      - .env
+
+    depends_on:
+      # Solo ordena el arranque; nginx tolera que la API tarde en responder
+      # (devolvería 502 en /api/ durante unos segundos), pero así se evita esa
+      # ventana en el despliegue.
+      - api
+
+    networks:
+      # `ruleta` para hablar con la API; `dokploy-network` para que Traefik,
+      # que vive en esa red, pueda alcanzar este contenedor y enrutar el
+      # dominio configurado en la UI. Sin la segunda red el dominio da 502.
+      - ruleta
+      - dokploy-network
+
+# ---------------------------------------------------------------------------
+# NOTA: aquí no hay servicio `mongo` ni volumen de datos, a diferencia del
+# compose de desarrollo. Si algún día se quisiera un Mongo dedicado a este
+# proyecto en vez de la instancia compartida, sería algo así —y entonces
+# MONGODB_URI pasaría a ser `mongodb://mongo:27017`:
+#
+#   mongo:
+#     image: docker.io/library/mongo:8
+#     restart: unless-stopped
+#     environment:
+#       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+#       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+#     volumes:
+#       - mongo-data:/data/db
+#     networks:
+#       - ruleta
+#
+#   volumes:
+#     mongo-data:
+# ---------------------------------------------------------------------------
+
+# La red se declara explícitamente para que ambos servicios se resuelvan por
+# nombre (`http://api:8000` en frontend/nginx.conf depende de esto) y para que
+# Dokploy pueda adjuntar Traefik a ella.
+networks:
+  ruleta:
+    driver: bridge
+
+  # Red que Dokploy crea al instalarse y en la que corren Traefik y los
+  # recursos de base de datos. Se declara como external porque ya existe en el
+  # servidor: este compose se engancha a ella, no la crea.
+  dokploy-network:
+    external: true

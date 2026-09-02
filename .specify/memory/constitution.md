@@ -171,8 +171,9 @@ Reglas no negociables:
 
 - Backend y frontend MUST ser imágenes de contenedor separadas, construidas desde
   Dockerfiles versionados en el repo.
-- `docker compose up` MUST levantar el sistema completo y funcional en local, sin
-  pasos manuales fuera del repo más allá de variables de entorno documentadas.
+- Un único `compose up` (con **podman**, que es el motor de referencia en local)
+  MUST levantar el sistema completo y funcional —backend, frontend y MongoDB—
+  sin pasos manuales fuera del repo más allá de variables de entorno documentadas.
 - nginx MUST servir el build estático del frontend y hacer de proxy de `/api`
   hacia el backend, de modo que front y back compartan origen.
 - El workflow de GitHub Actions MUST ejecutar lint y la suite de tests, y el

@@ -86,23 +86,30 @@ servidor.
 
 *GATE: Debe pasar antes de la Fase 0 e revisarse tras la Fase 1.*
 
-Evaluado contra `.specify/memory/constitution.md` v1.0.0.
+Evaluado contra `.specify/memory/constitution.md` **v1.1.0**.
 
 | Principio | Cómo lo cumple este plan | Estado |
 |---|---|---|
-| **I. El contrato de API es la fuente de verdad** | Los esquemas pydantic y los tipos TS se derivan de `docs/API_CONTRACT.md`; los tests de contrato afirman rutas, códigos y forma de cuerpos tal como el contrato los define. El frontend consume `/api/v1` por ruta relativa. Ningún endpoint fuera del contrato. | ✅ PASS |
-| **II. Dominio puro, separado del transporte** | `domain/` no importa FastAPI ni el repositorio concreto: contiene `color_for_number`, `resolve_bet`, `payout_for` y las transiciones de estado como funciones puras sobre entidades propias. La persistencia entra por `RouletteRepository` (`Protocol`). Los routers solo validan, delegan y mapean a HTTP. `Decimal` en todo importe. | ✅ PASS |
-| **III. Toda regla de negocio tiene un test** | Se planifican tests unitarios para: paridad de color incluido `0 → red`, pago 5x, pago 1.8x, pago 0 en fallo; y tests de API para rango 0..36, tope 10.000, `X-User-Id` ausente/vacío y las tres transiciones inválidas de la máquina de estados. El sorteo se inyecta en test para ser determinista. | ✅ PASS |
-| **IV. El enunciado manda; la desviación se documenta** | La paridad literal (0 rojo) se implementa como pide el enunciado y queda documentada en el contrato, en la sección A1 del spec y en el `README.md`, con test dedicado. | ✅ PASS |
-| **V. Despliegue reproducible y CI verde** | Dockerfiles separados para back y front, `docker-compose.yml` levanta el sistema completo, nginx sirve el front y proxya `/api`, GitHub Actions ejecuta lint + tests y solo despliega a Dokploy con la CI en verde. Configuración por variables de entorno. | ✅ PASS |
+| **I. El contrato de API es la fuente de verdad** | Los esquemas pydantic y los tipos TS se derivan de `docs/API_CONTRACT.md`; los tests de contrato afirman rutas, códigos y forma de cuerpos tal como el contrato los define. El frontend consume `/api/v1` por ruta relativa. Ningún endpoint fuera del contrato. El paso a MongoDB no altera ni un byte de la superficie HTTP. | ✅ PASS |
+| **II. Dominio puro, separado del transporte** | `domain/` no importa FastAPI, ni `motor`, ni `pymongo`, ni `bson`: contiene `color_for_number`, `resolve_bet`, `payout_for` y las transiciones de estado como funciones puras sobre entidades propias. La persistencia entra por `RouletteRepository` (`Protocol`) con dos implementaciones intercambiables. La conversión `Decimal` ↔ `Decimal128` vive solo en `infrastructure/mongo_repository.py`. Los routers solo validan, delegan y mapean a HTTP. | ✅ PASS |
+| **III. Toda regla de negocio tiene un test** | Tests unitarios para: paridad de color incluido `0 → red`, pago 5x, pago 1.8x, pago 0 en fallo; tests de API para rango 0..36, tope 10.000, `X-User-Id` ausente/vacío y las transiciones inválidas; y test de cierre concurrente para la atomicidad. La batería de repositorio corre contra las dos implementaciones, saltándose los casos de Mongo real si falta `MONGODB_TEST_URI`. El sorteo se inyecta para ser determinista. | ✅ PASS |
+| **IV. El enunciado manda; la desviación se documenta** | La paridad literal (0 rojo) se implementa como pide el enunciado; el argumento vive una sola vez en `DECISIONES.md` (D-01) y el contrato, el spec (§A1) y el `README.md` lo citan por identificador, con test dedicado. Igual con D-02 (pago bruto), D-03 (cierre terminal), D-04 (sin saldo) y D-05 (límites). | ✅ PASS |
+| **V. Despliegue reproducible y CI verde** | Dockerfiles separados para back y front, `compose` levanta backend + frontend + MongoDB local (podman) y deja el sistema funcional, nginx sirve el front y proxya `/api` bajo `ruleta.jcvb.com.co`, GitHub Actions ejecuta lint + tests, publica en GHCR y solo despliega llamando a la API de Dokploy con la CI en verde. Configuración por variables de entorno, incluida `MONGODB_URI`. | ✅ PASS |
 
 **Resultado**: sin violaciones. La tabla de Complexity Tracking queda vacía.
 
-**Nota sobre el repositorio tras Fase 1**: introducir un `Protocol` para un único
-almacén en memoria podría leerse como complejidad prematura. No lo es: el
-Principio II lo exige explícitamente ("la persistencia MUST estar detrás de una
-interfaz definida por el dominio"), y el coste es un archivo de ~20 líneas frente
-al beneficio de mantener el dominio ignorante del almacén.
+**Nota sobre el `Protocol` de repositorio tras Fase 1**: mantener una interfaz con
+dos implementaciones podría leerse como complejidad innecesaria ahora que hay una
+base de datos real. No lo es, por dos motivos: el Principio II lo exige
+explícitamente, y la implementación en memoria es lo que permite que la suite de
+tests corra completa y rápida sin levantar MongoDB, que es precisamente lo que
+hace cumplible el Principio III en CI.
+
+**Riesgo vigilado**: con dos implementaciones existe el riesgo de que diverjan y
+de que la de memoria oculte un fallo que solo aparece en Mongo (por ejemplo, la
+atomicidad de la transición condicionada). Se mitiga con una batería de tests de
+repositorio compartida que ambas deben pasar (T011b en `tasks.md`) y ejecutando el
+job de MongoDB en CI con un servicio real.
 
 ## Project Structure
 
@@ -137,7 +144,10 @@ backend/
 │       ├── services/
 │       │   └── roulette_service.py # Orquesta dominio + repositorio + sorteo
 │       ├── infrastructure/
-│       │   ├── memory_repository.py# InMemoryRouletteRepository
+│       │   ├── memory_repository.py# InMemoryRouletteRepository (tests, sin BD)
+│       │   ├── mongo_repository.py # MongoRouletteRepository sobre motor
+│       │   ├── mongo_client.py     # Cliente motor, ciclo de vida, índices
+│       │   ├── mapping.py          # Decimal <-> Decimal128, documento <-> entidad
 │       │   └── rng.py              # WinningNumberDrawer sobre secrets
 │       └── api/
 │           ├── deps.py             # Inyección de servicio y de X-User-Id
@@ -147,14 +157,19 @@ backend/
 │               ├── roulettes.py    # POST /, /{id}/open, /{id}/bets, /{id}/close, GETs
 │               └── health.py       # GET /health
 ├── tests/
-│   ├── unit/                       # Dominio puro, sin HTTP
+│   ├── unit/                       # Dominio puro, sin HTTP y sin BD
 │   │   ├── test_color_rules.py
 │   │   ├── test_payouts.py
-│   │   └── test_state_machine.py
+│   │   ├── test_state_machine.py
+│   │   └── test_rng.py
 │   ├── contract/                   # Forma de request/response por endpoint
 │   │   ├── test_create_open.py
 │   │   ├── test_bets.py
-│   │   └── test_close.py
+│   │   ├── test_close.py
+│   │   ├── test_queries.py
+│   │   └── test_health.py
+│   ├── repository/                 # Misma batería para AMBAS implementaciones
+│   │   └── test_repository_contract.py  # skip de Mongo sin MONGODB_TEST_URI
 │   └── integration/
 │       └── test_full_round.py      # Ciclo crear -> abrir -> apostar -> cerrar
 ├── pyproject.toml
@@ -186,7 +201,8 @@ docs/
 .github/workflows/
 └── ci-cd.yml                       # Lint + tests + build + deploy a Dokploy
 
-docker-compose.yml                  # backend + frontend(nginx) en local
+docker-compose.yml                  # backend + frontend(nginx) + MongoDB (podman)
+DECISIONES.md                       # Decisiones D-01..D-11 (no se toca desde aquí)
 README.md
 ```
 
@@ -216,18 +232,46 @@ Principio II.
   número fijo, lo que hace deterministas las aserciones de pago.
 - **Pagos con `Decimal`**: los multiplicadores son `Decimal("5")` y
   `Decimal("1.8")`. El resultado se cuantiza a dos decimales con
-  `ROUND_HALF_UP`. Los esquemas serializan `Decimal`, nunca `float`.
+  `ROUND_HALF_UP` (D-02). Los esquemas serializan `Decimal`, nunca `float`.
 - **Errores**: excepciones de dominio propias (`RouletteNotFound`,
   `RouletteNotOpen`, `InvalidStateTransition`, `MissingUserId`) traducidas a HTTP
   por handlers registrados en la app. El dominio nunca lanza `HTTPException`.
-- **Concurrencia en el cierre**: la transición a `closed` y el sorteo ocurren
-  bajo un cerrojo por ruleta en el repositorio en memoria, de modo que dos
-  cierres simultáneos no puedan sortear dos números; el segundo recibe 409.
-- **CORS**: en producción no es necesario porque nginx unifica el origen. Se
-  habilita solo en desarrollo, condicionado por variable de entorno, para el
-  `vite dev server`.
+- **Modelo de documento**: una sola colección, `roulettes`. Cada documento
+  contiene la ruleta y su array `bets`, más `winning_number`, `winning_color` y
+  `results` una vez cerrada. Ruleta y apuestas siempre se leen y se liquidan
+  juntas, así que repartirlas en dos colecciones solo añadiría una escritura que
+  coordinar en el cierre (D-08).
+- **`Decimal128` en el borde**: `mapping.py` es el único módulo que conoce
+  `bson.Decimal128`. Convierte a `Decimal` al leer y a `Decimal128` al escribir.
+  Ni el dominio ni los routers ven un tipo del driver.
+- **Transiciones atómicas**: abrir y cerrar usan
+  `find_one_and_update({"_id": id, "status": <esperado>}, {"$set": {...}})`. Si el
+  resultado es `None`, la ruleta no existe (se distingue con una segunda lectura)
+  o no estaba en el estado esperado → 409. El sorteo del número ganador se genera
+  antes y se escribe **dentro de esa misma actualización condicionada**, de modo
+  que dos cierres simultáneos solo pueden persistir uno; el perdedor recibe 409 y
+  su número sorteado se descarta sin haberse guardado (D-08, D-03).
+- **Índices**: al arrancar la app se garantizan los índices necesarios
+  (`status` y `created_at` para el listado ordenado). `_id` ya está indexado. La
+  creación es idempotente y no rompe si la base ya existe.
+- **Instancia de MongoDB compartida en Dokploy**: el proyecto usa su propia base
+  de datos dentro de la instancia existente, con credenciales propias por variable
+  de entorno. No se ejecuta nada de alcance global sobre el servidor.
+- **Arranque sin base de datos**: una variable de entorno selecciona la
+  implementación del repositorio. Sin `MONGODB_URI`, la app arranca con el
+  repositorio en memoria; con ella, usa MongoDB. Esto mantiene barato el
+  desarrollo y el arranque de pruebas.
+- **Salud**: `/api/v1/health` reporta `status: ok` solo si el `ping` a MongoDB
+  responde cuando el backend está configurado contra Mongo.
+- **CORS**: en producción no es necesario porque nginx unifica el origen bajo
+  `ruleta.jcvb.com.co`. Se habilita solo en desarrollo, condicionado por variable
+  de entorno, para el `vite dev server` (D-09).
 - **nginx**: `location /api { proxy_pass http://backend:8000; }` y `try_files`
   con fallback a `index.html` para las rutas del SPA.
+- **CI/CD**: GitHub Actions ejecuta lint y tests (con un servicio de MongoDB para
+  los tests marcados), construye las dos imágenes, las publica en **GHCR** y
+  dispara el despliegue con una **llamada HTTP directa a la API de Dokploy**, sin
+  acciones de terceros (D-10).
 
 ## Complexity Tracking
 

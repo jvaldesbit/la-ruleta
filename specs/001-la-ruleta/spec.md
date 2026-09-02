@@ -17,6 +17,10 @@ color: pares rojos, impares negros.
 y forma de los cuerpos JSON). Esta especificación describe el *qué*; el contrato
 fija el *cómo* concreto de la superficie HTTP. No pueden contradecirse.
 
+**Decisiones vigentes**: [`DECISIONES.md`](../../DECISIONES.md), con
+identificadores estables D-01..D-11. Es la única fuente donde se argumenta cada
+decisión sobre el enunciado; esta especificación las cita por identificador.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Ciclo completo de una ronda de ruleta (Priority: P1)
@@ -137,20 +141,29 @@ lo que devuelve el cierre.
 
 - **Número 0**: es par, por tanto **rojo** según el enunciado. Una apuesta a rojo
   gana si sale el 0; una apuesta a negro pierde. Divergencia consciente respecto
-  de la ruleta real (ver Ambigüedades, A1).
+  de la ruleta real (ver Ambigüedades A1 y D-01).
+- **Asimetría rojo/negro**: como consecuencia de D-01, los 37 números se reparten
+  en 19 rojos (los pares, incluido el 0) y 18 negros. El rojo es ligeramente más
+  probable. Es un efecto esperado de la regla del enunciado, no un defecto: un
+  test de distribución que asuma 50/50 estaría mal escrito.
 - **Ruleta cerrada sin apuestas**: se sortea igualmente el número ganador y se
   devuelven listas y totales vacíos/en cero.
 - **Cierre concurrente**: dos peticiones de cierre simultáneas sobre la misma
-  ruleta; solo una puede resolver y sortear, la otra debe recibir conflicto.
+  ruleta; solo una puede resolver y sortear, la otra debe recibir conflicto. Nunca
+  pueden guardarse dos números ganadores para la misma ruleta (D-03, D-08).
 - **Apuesta en el instante del cierre**: una apuesta que llega después de que la
   ruleta pasó a `closed` se rechaza; no participa en el sorteo.
 - **Doble acierto del mismo usuario**: un usuario con apuesta a número y a color
   que aciertan ambas cobra los dos pagos, calculados de forma independiente.
-- **Monto con más de dos decimales**: se rechaza o se normaliza a dos decimales
-  de forma determinista; nunca se acumula error de coma flotante.
+- **Monto con más de dos decimales**: se **rechaza** con 422. El enunciado habla
+  de dinero y dos decimales es el máximo admitido (D-05); no se normaliza en
+  silencio para no aceptar un importe distinto del que el usuario envió.
 - **`X-User-Id` presente pero vacío o solo espacios**: se trata como ausente.
-- **Reinicio del servicio**: el almacenamiento del MVP es en memoria, por lo que
-  las ruletas y apuestas se pierden. Es una limitación aceptada y documentada.
+- **Reinicio del servicio**: las ruletas y apuestas **sobreviven**, porque están
+  persistidas en MongoDB (D-08). Una ruleta abierta antes del reinicio sigue
+  abierta y puede cerrarse después.
+- **MongoDB no disponible**: el backend no puede servir operaciones de negocio.
+  El endpoint de salud debe reflejarlo en lugar de responder `ok` en falso.
 
 ## Requirements *(mandatory)*
 
@@ -236,7 +249,16 @@ lo que devuelve el cierre.
 - **FR-026**: El sistema MUST permitir consultar el detalle de una ruleta
   concreta, incluyendo sus apuestas y, si está cerrada, sus resultados.
 - **FR-027**: El sistema MUST exponer un endpoint de salud que confirme que el
-  servicio responde.
+  servicio responde y que su almacén de datos es alcanzable, sin reportar `ok`
+  cuando el almacén no lo está.
+- **FR-032**: El sistema MUST persistir ruletas y apuestas de forma duradera, de
+  modo que sobrevivan al reinicio del servicio: una ruleta abierta antes del
+  reinicio sigue abierta después y conserva sus apuestas, y una cerrada conserva
+  su número ganador y sus resultados (D-08).
+- **FR-033**: El sistema MUST garantizar que una ruleta se sortea exactamente una
+  vez: dos peticiones de cierre concurrentes sobre la misma ruleta MUST producir
+  un único número ganador persistido, resolviendo una y rechazando la otra con
+  conflicto (D-03).
 
 **Frontend**
 
@@ -284,19 +306,40 @@ lo que devuelve el cierre.
 - **SC-003**: Un usuario puede completar una ronda entera desde el navegador
   (crear, abrir, apostar, cerrar y ver resultado) sin errores y sin recargar la
   página manualmente.
-- **SC-004**: El sistema completo se levanta desde un repositorio limpio con un
-  único comando de contenedores y responde correctamente al endpoint de salud.
+- **SC-004**: El sistema completo (backend, frontend y MongoDB) se levanta desde
+  un repositorio limpio con un único comando de contenedores sobre podman y
+  responde correctamente al endpoint de salud.
 - **SC-005**: Sobre 10.000 cierres simulados, la distribución de números ganadores
   cubre los 37 valores posibles sin ningún valor imposible y sin sesgo evidente
   hacia un extremo del rango.
 - **SC-006**: Ninguna apuesta aceptada queda sin resolver tras el cierre de su
   ruleta: `total_bets` coincide con la longitud de `results` en toda respuesta de
   cierre.
+- **SC-007**: Tras reiniciar el backend, una ruleta creada antes del reinicio se
+  recupera con su estado y sus apuestas intactas.
+- **SC-008**: Bajo 50 peticiones de cierre concurrentes sobre la misma ruleta,
+  exactamente una responde 200 y las demás 409, y la ruleta queda con un único
+  número ganador persistido.
+- **SC-009**: La suite completa de tests se ejecuta y pasa sin ninguna base de
+  datos disponible, saltando de forma explícita solo los casos marcados que
+  requieren MongoDB real.
 
 ## Ambigüedades del enunciado y cómo se resolvieron
 
 El enunciado de la prueba técnica deja cuatro puntos abiertos. Todos se han
 cerrado con una decisión explícita, ya reflejada en `docs/API_CONTRACT.md`.
+
+**El argumento completo de cada decisión vive en [`DECISIONES.md`](../../DECISIONES.md)**,
+que es la fuente normativa. Esta sección resume el efecto sobre la especificación
+y remite al identificador correspondiente; no lo duplica.
+
+| Ambigüedad | Decisión | Efecto en esta spec |
+|---|---|---|
+| A1 · Color por paridad | **D-01** | FR-018, edge cases del 0 y de la asimetría 19/18 |
+| A2 · 5x y 1.8x brutos | **D-02** | FR-019, FR-020, FR-021, FR-024 |
+| A3 · Sin validación de saldo | **D-04** | FR-013 |
+| A4 · Cierre terminal | **D-03** | FR-016, FR-033 |
+| — · Límites de la apuesta | **D-05** | FR-008, FR-009, FR-010, FR-007 |
 
 ### A1 — "Par = rojo, impar = negro" contradice la ruleta real
 
@@ -308,12 +351,14 @@ los impares negros. En una ruleta europea real los colores no siguen la paridad
 `numero % 2 == 1 → black`. Como consecuencia directa, **el 0 es rojo** y una
 apuesta a `red` gana cuando sale el 0.
 
-**Motivo**: la entrega se evalúa contra el enunciado, no contra el reglamento del
-casino. Reproducir la ruleta real exigiría inventar una tabla de colores y una
-regla para el verde que el enunciado no menciona, y haría que el resultado no
-coincidiera con lo que el evaluador espera al leer su propio texto.
+**Motivo**: ver **D-01** en `DECISIONES.md`. En resumen: el enunciado es la
+especificación de la prueba y corregirlo hacia la ruleta real sería sustituir el
+requisito por una opinión.
 
-**Rastro**: documentado en `docs/API_CONTRACT.md`, en esta sección y en el
+**Consecuencia visible**: los 37 números quedan en 19 rojos y 18 negros, así que
+el rojo es algo más probable que el negro. Es un efecto de la regla pedida.
+
+**Rastro**: `DECISIONES.md` (D-01), `docs/API_CONTRACT.md`, esta sección y el
 `README.md`, con un test específico para el caso `0 → red`.
 
 ### A2 — "Paga 5 veces" / "paga 1.8 veces": ¿bruto o ganancia neta?
@@ -326,10 +371,9 @@ leerse como devolver `monto * 5` en total (bruto) o como devolver el monto más
 total que recibe el usuario: `monto * 5` para número y `monto * 1.8` para color.
 Una apuesta ganadora de 100 a un número devuelve 500 en total, no 600.
 
-**Motivo**: es la lectura literal de "paga N veces lo apostado" y es la
-convención habitual al expresar cuotas en formato decimal. La lectura neta
-haría que el multiplicador 1.8 del color produjera un retorno de 2.8x, que se
-aleja de cualquier cuota razonable para una apuesta de color.
+**Motivo**: ver **D-02** en `DECISIONES.md`. El argumento decisivo es que el 1.8
+del color solo tiene sentido como pago bruto: bajo la lectura neta el jugador
+esperaría 1.4 por cada 1 apostado y la banca perdería dinero en cada tirada.
 
 **Consecuencia visible**: el campo se llama `payout` y no `profit`, y
 `total_amount_paid` es la suma de pagos brutos, no de ganancias.
@@ -344,9 +388,9 @@ existe entidad usuario con balance. `X-User-Id` se acepta como identidad ya
 verificada por un sistema externo, con la única validación de que sea una cadena
 no vacía.
 
-**Motivo**: el enunciado lo declara como supuesto dado. Añadir una cartera
-implicaría inventar reglas de recarga, bloqueo de fondos y pago de premios que no
-están en el alcance de la prueba.
+**Motivo**: ver **D-04** en `DECISIONES.md`. El enunciado lo declara como supuesto
+dado. La frontera donde entraría la autenticación real es la dependencia que hoy
+lee el header.
 
 **Consecuencia visible**: no hay endpoints de usuario ni de saldo, y ninguna
 apuesta se rechaza por fondos insuficientes.
@@ -360,11 +404,9 @@ ruleta cerrada puede volver a abrirse para una segunda ronda.
 estrictamente `created → open → closed`, sin transiciones de vuelta. Para jugar
 otra ronda se crea una ruleta nueva.
 
-**Motivo**: el endpoint de cierre "devuelve el resultado de las apuestas hechas
-desde su apertura hasta el cierre", lo que ata cada ruleta a exactamente una
-ronda y un único número ganador. Permitir la reapertura obligaría a modelar
-rondas dentro de una ruleta, con un histórico de resultados que el enunciado no
-pide, y dejaría ambiguo qué devuelve un segundo cierre.
+**Motivo**: ver **D-03** en `DECISIONES.md`. En resumen: un sorteo que se puede
+repetir no es un sorteo, y el mismo periodo tendría dos números ganadores con las
+apuestas ya liquidadas en un estado indefinido.
 
 **Consecuencia visible**: abrir o cerrar una ruleta `closed` devuelve conflicto,
 y el campo `winning_number` de una ruleta se escribe una sola vez.
@@ -378,11 +420,18 @@ esta especificación.
   identidad de confianza y no se verifica contra ningún directorio.
 - No hay control de acceso ni roles: cualquier cliente puede crear, abrir y
   cerrar ruletas. Distinguir operador de apostador queda fuera del MVP.
-- La persistencia es en memoria del proceso; reiniciar el servicio borra ruletas
-  y apuestas. Se acepta para el MVP y se sustituye después implementando la misma
-  interfaz de repositorio.
-- El servicio se despliega como una única instancia; no hay estado compartido
-  entre réplicas. Escalar horizontalmente requiere primero un almacén externo.
+- La persistencia es duradera, en MongoDB (D-08). Existe además una
+  implementación en memoria del mismo repositorio, usada por los tests y por el
+  arranque sin base de datos; no es el modo de despliegue.
+- El estado vive fuera del proceso, así que el servicio no depende de una única
+  instancia. Las transiciones de estado se hacen condicionadas al estado esperado
+  precisamente para que dos peticiones concurrentes, en la misma instancia o en
+  réplicas distintas, no puedan sortear dos veces.
+- La instancia de MongoDB en el despliegue es **compartida** con otros servicios
+  de Dokploy; este proyecto usa su propia base de datos dentro de ella y no asume
+  uso exclusivo del servidor.
+- No hay migraciones ni versionado de esquema en el MVP: la única colección se
+  crea sola al primer escritura y los índices se aseguran al arrancar.
 - Los importes están en dólares estadounidenses. No hay conversión de divisa ni
   redondeo dependiente de configuración regional.
 - El frontend y el backend se sirven desde el mismo origen en producción, con

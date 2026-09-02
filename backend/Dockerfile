@@ -83,6 +83,10 @@ EXPOSE 8000
 
 # El propio contenedor se declara insano si /api/v1/health deja de responder;
 # Docker Compose y Dokploy usan esto para reiniciar o retrasar el tráfico.
+# `curl -fsS` falla con cualquier código >= 400, así que el 503 que devuelve
+# /api/v1/health cuando Mongo no responde (status: degraded) marca el
+# contenedor como unhealthy, que es justo lo que se quiere: una API sin base
+# de datos no debería recibir tráfico.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8000/api/v1/health || exit 1
 

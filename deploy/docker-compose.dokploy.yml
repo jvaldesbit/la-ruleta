@@ -123,7 +123,7 @@ services:
 # MONGODB_URI pasaría a ser `mongodb://mongo:27017`:
 #
 #   mongo:
-#     image: docker.io/library/mongo:8
+#     image: docker.io/library/mongo:8.2   # 8.0.x no arranca en kernels 6.19+
 #     restart: unless-stopped
 #     environment:
 #       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}

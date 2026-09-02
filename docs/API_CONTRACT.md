@@ -77,7 +77,21 @@ Cierra la ruleta, sortea el número y resuelve todas las apuestas.
 200 -> el mismo objeto de la lista más `bets` (apuestas) y, si está cerrada, `results`.
 
 ### GET /api/v1/health
-200 -> `{"status":"ok","version":"..."}`
+Comprueba que la aplicación responde y que su almacén está vivo.
+
+200 -> `{"status":"ok","version":"...","storage":"memory|mongo"}`
+503 -> `{"status":"degraded","version":"...","storage":"mongo"}`
+
+`storage` dice qué implementación de almacenamiento está en uso, que es lo
+primero que hay que saber cuando el estado desaparece entre peticiones: sin
+`MONGODB_URI` la aplicación arranca contra memoria y pierde los datos en cada
+reinicio, y desde fuera eso es indistinguible de una base de datos vacía.
+
+El 503 es deliberado y no un 200 con un campo que diga que algo va mal. Este
+endpoint es el que consultan el healthcheck del contenedor y el proxy: una API
+que no alcanza su base de datos no puede atender apuestas, y decir "ok" con
+letra pequeña haría que se le siguiera enviando tráfico. Con almacén en
+memoria nunca hay 503, porque no hay nada externo que pueda caerse.
 
 ## Notas de front
 

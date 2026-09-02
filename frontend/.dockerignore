@@ -1,0 +1,15 @@
+# node_modules se reinstala dentro del contenedor con el lockfile: copiarlo
+# desde el host rompe binarios nativos y hace el contexto enorme.
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+.eslintcache
+
+.env
+.env.*
+.git/
+.gitignore
+Dockerfile
+.dockerignore
+coverage/

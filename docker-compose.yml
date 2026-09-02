@@ -1,0 +1,99 @@
+# ---------------------------------------------------------------------------
+# La Ruleta — desarrollo local.
+#
+#   podman compose up --build      -> http://localhost:8080
+#   docker compose up --build      -> lo mismo, si usas Docker
+#
+# Construye las dos imágenes desde el código del repo y levanta un MongoDB
+# para la persistencia. El compose de producción está en
+# deploy/docker-compose.dokploy.yml y usa imágenes ya publicadas en GHCR más
+# el MongoDB que ya existe en Dokploy; los dos ficheros son distintos a
+# propósito.
+#
+# Compatibilidad con podman:
+#   • nombres de imagen totalmente cualificados (docker.io/library/...), porque
+#     podman no asume Docker Hub y con nombres cortos pregunta o falla;
+#   • sin la clave `version:`, obsoleta en Compose Spec y ruidosa en podman;
+#   • `depends_on` en forma de lista simple, que es lo que entienden por igual
+#     podman compose, podman-compose y docker compose.
+# ---------------------------------------------------------------------------
+
+services:
+  mongo:
+    image: docker.io/library/mongo:8
+    container_name: la-ruleta-mongo
+    restart: unless-stopped
+    # Sin credenciales: es una base de datos local y efímera de desarrollo. En
+    # producción se usa la instancia de Dokploy, que sí las tiene.
+    environment:
+      MONGO_INITDB_DATABASE: ruleta
+    # Se publica para poder inspeccionar la base con mongosh o Compass desde
+    # el host. Si el 27017 ya está ocupado en tu máquina, cambia el lado
+    # izquierdo o comenta estas dos líneas: la API no lo necesita.
+    ports:
+      - "27017:27017"
+    volumes:
+      # Volumen con nombre, no un bind mount: evita líos de permisos con
+      # podman rootless y sobrevive a `compose down` (para borrar los datos,
+      # `compose down -v`).
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - ruleta
+
+  api:
+    build:
+      context: ./backend
+      args:
+        RELEASE_VERSION: dev
+        GIT_REVISION: local
+        BUILD_TIME: local
+    container_name: la-ruleta-api
+    restart: unless-stopped
+    environment:
+      # "mongo" es el nombre del servicio; la red interna lo resuelve por DNS.
+      # Si esta variable faltara, el backend cae a almacenamiento en memoria.
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: ruleta
+    # Se publica el 8000 solo en local, para poder golpear la API directamente
+    # con curl o abrir /docs sin pasar por nginx. En producción no se expone.
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mongo
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - ruleta
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        RELEASE_VERSION: dev
+        GIT_REVISION: local
+        BUILD_TIME: local
+    container_name: la-ruleta-web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    networks:
+      - ruleta
+
+volumes:
+  mongo-data:
+
+networks:
+  ruleta:
+    driver: bridge

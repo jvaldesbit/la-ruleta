@@ -1,0 +1,25 @@
+# Todo lo que no hace falta dentro del contexto de build: acelera el envío al
+# daemon y evita invalidar capas por ficheros irrelevantes.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+tests/
+.env
+.env.*
+.git/
+.gitignore
+Dockerfile
+.dockerignore

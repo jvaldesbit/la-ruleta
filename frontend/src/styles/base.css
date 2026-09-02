@@ -183,7 +183,7 @@ input {
 
 @media (min-width: 940px) {
   .table__body {
-    grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+    grid-template-columns: minmax(340px, 460px) minmax(0, 1fr);
   }
 }
 
@@ -335,4 +335,29 @@ input {
   .table.is-flashing .table__spot {
     animation: none;
   }
+}
+
+/* Interruptor del sonido, junto a la lámpara de conexión. */
+.speaker {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--brass-200);
+  background: rgb(4 22 15 / 72%);
+  border: 1px solid rgb(212 172 82 / 32%);
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.speaker:hover {
+  color: var(--brass-100);
+  border-color: var(--brass-200);
+}
+
+.speaker.is-muted {
+  color: var(--bone-faint);
+  border-color: rgb(157 148 130 / 30%);
 }

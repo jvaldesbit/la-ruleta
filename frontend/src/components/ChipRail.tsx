@@ -32,14 +32,15 @@ export function ChipRail({
     <div className="rail">
       <div className="rail__chips" role="group" aria-label="Fichas">
         {CHIP_VALUES.map((value) => {
+          // Aunque se pase del tope la ficha sigue viva: al pulsarla dice por qué
+          // no entra, en vez de tragarse el clic sin explicación.
           const wouldExceed = stake + value > MAX_AMOUNT
           return (
             <button
               key={value}
               type="button"
-              className={`chip ${CHIP_CLASS[value]}`}
-              disabled={disabled || wouldExceed}
-              title={wouldExceed ? `Superaría el tope de ${formatMoney(MAX_AMOUNT)}` : undefined}
+              className={`chip ${CHIP_CLASS[value]}${wouldExceed ? ' is-over-cap' : ''}`}
+              disabled={disabled}
               onClick={() => {
                 onAdd(value)
               }}

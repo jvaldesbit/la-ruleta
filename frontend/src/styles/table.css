@@ -10,8 +10,16 @@
 }
 
 .wheel {
+  width: min(100%, 440px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.wheel__face {
   position: relative;
-  width: min(100%, 400px);
+  width: 100%;
   aspect-ratio: 1;
   filter: drop-shadow(0 22px 30px rgb(0 0 0 / 55%));
 }
@@ -69,32 +77,48 @@
   filter: drop-shadow(0 3px 4px rgb(0 0 0 / 60%));
 }
 
-/* Cifra ganadora bajo la rueda, en plaquita de latón. */
+/* La cifra ganadora es el remate de la mesa: placa de latón a tamaño de mesa. */
 .wheel__result {
-  position: absolute;
-  left: 50%;
-  bottom: -14px;
-  translate: -50% 0;
-  min-width: 74px;
-  padding: 4px 14px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: min(100%, 210px);
+  padding: 10px 30px 14px;
   text-align: center;
-  border-radius: 999px;
+  border-radius: 14px;
   border: 2px solid var(--brass-300);
-  background: linear-gradient(180deg, #1a1611, #0a0907);
-  box-shadow: 0 8px 18px rgb(0 0 0 / 55%);
-  animation: plaque-in 520ms cubic-bezier(0.2, 1.2, 0.3, 1) 1;
+  background:
+    linear-gradient(180deg, rgb(30 24 15 / 96%), rgb(10 9 7 / 98%));
+  box-shadow:
+    inset 0 1px 0 rgb(249 231 182 / 45%),
+    0 14px 30px rgb(0 0 0 / 60%),
+    0 0 34px rgb(212 172 82 / 22%);
+  animation: plaque-in 560ms cubic-bezier(0.16, 1, 0.3, 1) 1;
 }
 
 .wheel__result--red {
   border-color: #e2606a;
+  box-shadow:
+    inset 0 1px 0 rgb(249 231 182 / 45%),
+    0 14px 30px rgb(0 0 0 / 60%),
+    0 0 34px rgb(193 18 31 / 30%);
 }
 
 .wheel__result-number {
   font-family: var(--display);
   font-weight: 900;
-  font-size: 2rem;
-  line-height: 1.1;
+  font-size: clamp(3.4rem, 11vw, 4.6rem);
+  line-height: 0.95;
   color: var(--brass-100);
+  text-shadow: 0 2px 0 rgb(0 0 0 / 55%), 0 0 26px rgb(249 231 182 / 30%);
+}
+
+.wheel__result-color {
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--bone-dim);
 }
 
 @keyframes plaque-in {
@@ -393,7 +417,7 @@
 .block__odds {
   font-size: 0.76rem;
   letter-spacing: 0.08em;
-  color: rgb(251 244 230 / 68%);
+  color: var(--bone);
 }
 
 .block:hover:not(:disabled) {
@@ -499,7 +523,7 @@
     var(--shadow-chip),
     inset 0 0 0 2px rgb(0 0 0 / 22%),
     inset 0 -3px 7px rgb(0 0 0 / 42%);
-  transition: transform 130ms cubic-bezier(0.2, 1.4, 0.4, 1), filter 130ms ease;
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1), filter 150ms ease;
 }
 
 /* Muescas blancas del canto. */
@@ -679,12 +703,25 @@
   transform: translateY(1px);
 }
 
+/* Deshabilitado sigue siendo la placa dorada, apagada: se ve que es el
+   sitio donde se apuesta aunque ahora mismo no se pueda. */
 .place__go:disabled {
   cursor: not-allowed;
-  color: var(--bone-dim);
-  background: rgb(8 44 30 / 70%);
-  border-color: rgb(212 172 82 / 26%);
-  box-shadow: none;
+  filter: saturate(0.55) brightness(0.62);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 25%);
+}
+
+.place__reason {
+  margin: 0;
+  text-align: center;
+  color: var(--brass-200);
+  font-size: 0.84rem;
+  letter-spacing: 0.02em;
+}
+
+/* Ficha que se pasaría del tope: se marca, pero sigue pulsable. */
+.chip.is-over-cap {
+  opacity: 0.55;
 }
 
 .place__error {

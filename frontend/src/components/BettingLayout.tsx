@@ -1,8 +1,7 @@
 import type { BetColor } from '../api/types'
+import type { Selection } from '../lib/betSlip'
 import { MAX_NUMBER, colorOfNumber } from '../lib/roulette'
 import { ChipStack } from './ChipStack'
-
-export type Selection = { kind: 'number'; value: number } | { kind: 'color'; value: BetColor }
 
 interface BettingLayoutProps {
   selection: Selection | null

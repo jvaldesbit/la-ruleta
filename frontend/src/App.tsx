@@ -2,14 +2,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api/client'
 import { ApiError } from './api/errors'
 import type { CloseRouletteResponse, RouletteDetail, RouletteSummary } from './api/types'
-import { addChip, sum } from './lib/chips'
 import type { ChipValue } from './lib/chips'
+import {
+  EMPTY_SLIP,
+  addSlipChip,
+  chipExceedsCap,
+  clearSlipAmount,
+  pickSlip,
+  restoreSlip,
+  setSlipExact,
+  slipAmountText,
+  slipStake,
+  submitSlip,
+  undoSlipChip,
+} from './lib/betSlip'
 import { formatMoney } from './lib/format'
+import { MAX_AMOUNT } from './lib/roulette'
+import { isMuted, playSound, primeAudio, setMuted, soundSupported } from './lib/sound'
 import { useUserId } from './lib/useUserId'
 import { validateBet } from './lib/validation'
 import { BetsStrip } from './components/BetsStrip'
 import { BettingLayout } from './components/BettingLayout'
-import type { Selection } from './components/BettingLayout'
 import { ChipRail } from './components/ChipRail'
 import { InfoTip } from './components/InfoTip'
 import { Marquee } from './components/Marquee'
@@ -30,6 +43,9 @@ function describeError(cause: unknown): string {
 export function App() {
   const [userId, setUserId] = useUserId()
   const [health, setHealth] = useState<HealthState>('checking')
+  const [muted, setMutedState] = useState(() => isMuted() || !soundSupported())
+  /** Qué tocar cuando la rueda frene, decidido al cerrar la mesa. */
+  const outcome = useRef<'win' | 'lose' | null>(null)
 
   const [roulettes, setRoulettes] = useState<RouletteSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,9 +53,7 @@ export function App() {
   const [detail, setDetail] = useState<RouletteDetail | null>(null)
   const [closeResult, setCloseResult] = useState<CloseRouletteResponse | null>(null)
 
-  const [stack, setStack] = useState<number[]>([])
-  const [exact, setExact] = useState('')
-  const [selection, setSelection] = useState<Selection | null>(null)
+  const [slip, setSlip] = useState(EMPTY_SLIP)
 
   const [busyId, setBusyId] = useState<string | null>(null)
   const [placing, setPlacing] = useState(false)
@@ -68,16 +82,8 @@ export function App() {
     [roulettes, selectedId],
   )
 
-  const stake = useMemo(() => {
-    const manual = exact.trim().replace(',', '.')
-    if (manual !== '') {
-      const parsed = Number(manual)
-      return Number.isFinite(parsed) ? parsed : 0
-    }
-    return sum(stack)
-  }, [exact, stack])
-
-  const amountText = exact.trim() !== '' ? exact : String(sum(stack))
+  const stake = slipStake(slip)
+  const { selection } = slip
 
   const loadRoulettes = useCallback(async (): Promise<RouletteSummary[]> => {
     setLoading(true)
@@ -104,6 +110,27 @@ export function App() {
     },
     [pushToast],
   )
+
+  useEffect(() => {
+    const prime = () => {
+      primeAudio()
+    }
+    window.addEventListener('pointerdown', prime, { once: true })
+    window.addEventListener('keydown', prime, { once: true })
+    return () => {
+      window.removeEventListener('pointerdown', prime)
+      window.removeEventListener('keydown', prime)
+    }
+  }, [])
+
+  const toggleSound = useCallback(() => {
+    const next = !muted
+    primeAudio()
+    setMuted(next)
+    setMutedState(next)
+    // Al encenderlo suena una ficha: se oye de inmediato que está vivo.
+    if (!next) playSound('chip')
+  }, [muted])
 
   useEffect(() => {
     void (async () => {
@@ -159,17 +186,44 @@ export function App() {
 
   const isFreshSpin = closeResult !== null && closeResult.roulette_id === selectedId
 
+  /** La mesa no se refresca hasta que la rueda frena: así no se adelanta el final. */
+  const pendingRefresh = useRef<string | null>(null)
+
   const handleSettled = useCallback(() => {
     setSpinning(false)
     setRevealed(true)
-  }, [])
+    playSound('stop')
+    if (outcome.current !== null) {
+      const won = outcome.current === 'win'
+      outcome.current = null
+      window.setTimeout(() => {
+        playSound(won ? 'win' : 'lose')
+      }, 260)
+      if (won) {
+        setFlash(true)
+        window.setTimeout(() => {
+          setFlash(false)
+        }, 1400)
+      }
+    }
+    const pending = pendingRefresh.current
+    if (pending === null) return
+    pendingRefresh.current = null
+    void (async () => {
+      await loadRoulettes()
+      await loadDetail(pending)
+    })()
+  }, [loadRoulettes, loadDetail])
 
   const handleSelectTable = useCallback((id: string) => {
     setSelectedId(id)
-    setSelection(null)
+    setSlip(EMPTY_SLIP)
     setFormError(null)
     setRevealed(true)
     setSpinning(false)
+    // El giro solo se anima la vez que ocurre: al volver a una mesa ya cerrada
+    // el resultado se coloca sin repetir la animación.
+    setCloseResult((current) => (current !== null && current.roulette_id === id ? current : null))
   }, [])
 
   const handleCreate = useCallback(() => {
@@ -177,7 +231,7 @@ export function App() {
       try {
         const created = await api.createRoulette()
         setCloseResult(null)
-        setSelection(null)
+        setSlip(EMPTY_SLIP)
         setSelectedId(created.id)
         setRevealed(true)
         await loadRoulettes()
@@ -214,18 +268,11 @@ export function App() {
         try {
           const response = await api.closeRoulette(rouletteId)
           setCloseResult(response)
-          setSelection(null)
+          setSlip(EMPTY_SLIP)
+          playSound('spin')
           const mine = response.results.some((bet) => bet.won && bet.user_id === userId.trim())
-          if (mine) {
-            window.setTimeout(() => {
-              setFlash(true)
-              window.setTimeout(() => {
-                setFlash(false)
-              }, 1400)
-            }, 4300)
-          }
-          await loadRoulettes()
-          await loadDetail(rouletteId)
+          outcome.current = mine ? 'win' : 'lose'
+          pendingRefresh.current = rouletteId
         } catch (cause) {
           setSpinning(false)
           setRevealed(true)
@@ -235,7 +282,7 @@ export function App() {
         }
       })()
     },
-    [loadRoulettes, loadDetail, pushToast, userId],
+    [pushToast, userId],
   )
 
   const blockedReason = useMemo(() => {
@@ -252,6 +299,7 @@ export function App() {
 
   const handleBet = useCallback(() => {
     if (selection === null || selectedId === null || blockedReason !== null) return
+    const amountText = slipAmountText(slip)
     const draft =
       selection.kind === 'number'
         ? { type: 'number' as const, number: String(selection.value), color: 'red' as const, amount: amountText }
@@ -264,28 +312,42 @@ export function App() {
     }
     setFormError(null)
 
+    // La mesa se libera aquí, no cuando conteste el servidor: el jugador puede
+    // encadenar apuestas sin que se le pierdan los clics.
+    const enviada = slip
+    setSlip(submitSlip())
+    playSound('place')
+
     void (async () => {
       setPlacing(true)
       try {
         await api.placeBet(selectedId, userId.trim(), checked.bet)
-        setStack([])
-        setExact('')
-        setSelection(null)
-        await loadRoulettes()
-        await loadDetail(selectedId)
       } catch (cause) {
+        // Devolvemos las fichas, salvo que ya haya empezado otra apuesta.
+        setSlip((current) => restoreSlip(current, enviada))
         setFormError(describeError(cause))
+        return
       } finally {
         setPlacing(false)
       }
+      // Refrescos en segundo plano: no bloquean el tapete.
+      await loadRoulettes()
+      await loadDetail(selectedId)
     })()
-  }, [selection, selectedId, blockedReason, amountText, userId, loadRoulettes, loadDetail])
+  }, [slip, selection, selectedId, blockedReason, userId, loadRoulettes, loadDetail])
 
-  const addStackChip = useCallback((value: ChipValue) => {
-    setExact('')
-    setFormError(null)
-    setStack((current) => addChip(current, value))
-  }, [])
+  const addStackChip = useCallback(
+    (value: ChipValue) => {
+      if (chipExceedsCap(slip, value)) {
+        setFormError(`El tope por apuesta son ${formatMoney(MAX_AMOUNT)}.`)
+        return
+      }
+      setFormError(null)
+      playSound('chip')
+      setSlip((current) => addSlipChip(current, value))
+    },
+    [slip],
+  )
 
   return (
     <div className={`table${flash ? ' is-flashing' : ''}`}>
@@ -293,7 +355,13 @@ export function App() {
       <Toasts items={toasts} onDismiss={dismissToast} />
 
       <div className="table__inner">
-        <Marquee userId={userId} onUserIdChange={setUserId} health={health} />
+        <Marquee
+          userId={userId}
+          onUserIdChange={setUserId}
+          health={health}
+          muted={muted}
+          onToggleSound={toggleSound}
+        />
 
         <div className="table__body">
           <aside className="pit">
@@ -308,6 +376,7 @@ export function App() {
               selectedId={selectedId}
               loading={loading}
               busyId={busyId}
+              spinning={spinning}
               onSelect={handleSelectTable}
               onCreate={handleCreate}
               onOpen={handleOpen}
@@ -319,30 +388,28 @@ export function App() {
             <BettingLayout
               selection={selection}
               stake={stake}
-              disabled={bettingClosed || spinning || placing}
+              disabled={bettingClosed || spinning}
               onSelect={(next) => {
-                setSelection(next)
+                setSlip((current) => pickSlip(current, next))
                 setFormError(null)
               }}
             />
 
             <ChipRail
-              stack={stack}
+              stack={slip.stack}
               stake={stake}
-              disabled={bettingClosed || spinning || placing}
-              exact={exact}
+              disabled={bettingClosed || spinning}
+              exact={slip.exact}
               onAdd={addStackChip}
               onUndo={() => {
-                setStack((current) => current.slice(0, -1))
+                setSlip(undoSlipChip)
               }}
               onClear={() => {
-                setStack([])
-                setExact('')
+                setSlip(clearSlipAmount)
               }}
               onSetExact={(value) => {
-                setStack([])
                 setFormError(null)
-                setExact(value)
+                setSlip((current) => setSlipExact(current, value))
               }}
             />
 
@@ -353,12 +420,14 @@ export function App() {
                 disabled={blockedReason !== null || placing || spinning}
                 onClick={handleBet}
               >
-                {placing ? 'Colocando…' : blockedReason ?? `Apostar ${formatMoney(stake)}`}
+                Apostar {formatMoney(stake)}
               </button>
               {formError !== null ? (
                 <p className="place__error" role="alert">
                   {formError}
                 </p>
+              ) : blockedReason !== null ? (
+                <p className="place__reason">{blockedReason}</p>
               ) : null}
             </div>
 

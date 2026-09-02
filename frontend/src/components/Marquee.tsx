@@ -1,4 +1,5 @@
 import { Icon } from './Icon'
+import { SoundToggle } from './SoundToggle'
 
 type HealthState = 'checking' | 'ok' | 'down'
 
@@ -6,6 +7,8 @@ interface MarqueeProps {
   userId: string
   onUserIdChange: (next: string) => void
   health: HealthState
+  muted: boolean
+  onToggleSound: () => void
 }
 
 const HEALTH_TITLE: Record<HealthState, string> = {
@@ -14,7 +17,7 @@ const HEALTH_TITLE: Record<HealthState, string> = {
   down: 'Sin conexión con la mesa',
 }
 
-export function Marquee({ userId, onUserIdChange, health }: MarqueeProps) {
+export function Marquee({ userId, onUserIdChange, health, muted, onToggleSound }: MarqueeProps) {
   return (
     <header className="marquee">
       <div className="marquee__sign">
@@ -39,6 +42,7 @@ export function Marquee({ userId, onUserIdChange, health }: MarqueeProps) {
             }}
           />
         </label>
+        <SoundToggle muted={muted} onToggle={onToggleSound} />
         <span className={`lamp lamp--${health}`} title={HEALTH_TITLE[health]}>
           <span className="sr-only">{HEALTH_TITLE[health]}</span>
         </span>

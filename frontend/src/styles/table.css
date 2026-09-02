@@ -1,0 +1,688 @@
+/* --------------------------------------------------------------
+   El pozo: rueda, flecha de latón y placas de mesa
+   -------------------------------------------------------------- */
+
+.pit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.wheel {
+  position: relative;
+  width: min(100%, 340px);
+  aspect-ratio: 1;
+  filter: drop-shadow(0 22px 30px rgb(0 0 0 / 55%));
+}
+
+.wheel__svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.wheel__pocket {
+  stroke: #d8b25f;
+  stroke-width: 0.7;
+  stroke-opacity: 0.42;
+}
+
+.wheel__pocket--red {
+  fill: #a5121c;
+}
+
+.wheel__pocket--black {
+  fill: #17161a;
+}
+
+.wheel__pocket.is-winner {
+  fill: #f0c463;
+  stroke: #fff3d0;
+  stroke-width: 1.6;
+  stroke-opacity: 1;
+}
+
+.wheel__digit {
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+  fill: #f7f0e2;
+  paint-order: stroke;
+  stroke: rgb(0 0 0 / 45%);
+  stroke-width: 2px;
+  pointer-events: none;
+}
+
+.wheel__ball {
+  fill: #fdf8ec;
+  stroke: #9a9384;
+  stroke-width: 0.8;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 70%));
+}
+
+.wheel__pointer {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  translate: -50% 0;
+  filter: drop-shadow(0 3px 4px rgb(0 0 0 / 60%));
+}
+
+/* Cifra ganadora bajo la rueda, en plaquita de latón. */
+.wheel__result {
+  position: absolute;
+  left: 50%;
+  bottom: -14px;
+  translate: -50% 0;
+  min-width: 74px;
+  padding: 4px 14px 6px;
+  text-align: center;
+  border-radius: 999px;
+  border: 2px solid var(--brass-300);
+  background: linear-gradient(180deg, #1a1611, #0a0907);
+  box-shadow: 0 8px 18px rgb(0 0 0 / 55%);
+  animation: plaque-in 520ms cubic-bezier(0.2, 1.2, 0.3, 1) 1;
+}
+
+.wheel__result--red {
+  border-color: #e2606a;
+}
+
+.wheel__result-number {
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: 2rem;
+  line-height: 1.1;
+  color: var(--brass-100);
+}
+
+@keyframes plaque-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.85);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.wheel.is-spinning .wheel__result {
+  display: none;
+}
+
+/* Placas de mesa */
+
+.tables {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  align-items: center;
+}
+
+.tables__rail {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.plaque {
+  position: relative;
+  width: 46px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  border: 1px solid rgb(212 172 82 / 34%);
+  background: linear-gradient(180deg, rgb(20 96 61 / 55%), rgb(6 40 27 / 75%));
+  color: var(--bone-dim);
+  transition: border-color 140ms ease, color 140ms ease, transform 90ms ease;
+}
+
+.plaque:hover:not(:disabled) {
+  border-color: var(--brass-200);
+  color: var(--bone);
+}
+
+.plaque:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.plaque.is-active {
+  border-color: var(--brass-200);
+  color: var(--brass-100);
+  background: linear-gradient(180deg, rgb(30 122 78 / 70%), rgb(9 55 36 / 85%));
+  box-shadow: 0 0 0 1px rgb(237 207 133 / 45%), 0 6px 14px rgb(0 0 0 / 45%);
+}
+
+.plaque__n {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+.plaque__state {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bone-faint);
+}
+
+.plaque--open .plaque__state {
+  background: var(--win);
+  box-shadow: 0 0 6px rgb(98 215 155 / 80%);
+}
+
+.plaque--closed .plaque__state {
+  background: var(--loss);
+}
+
+.plaque--new {
+  color: var(--brass-200);
+  border-style: dashed;
+}
+
+.plaque:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tables__actions {
+  display: flex;
+  gap: 10px;
+  min-height: 42px;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+  transition: filter 140ms ease, transform 90ms ease;
+}
+
+.action:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.action:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action--open {
+  background: linear-gradient(180deg, #1c8a58, #0d5233);
+  border-color: #2fb377;
+  color: #eafff3;
+}
+
+.action--spin {
+  background: linear-gradient(180deg, var(--red-500), var(--red-700));
+  border-color: #e2606a;
+  color: #fff2f2;
+  box-shadow: 0 0 20px rgb(193 18 31 / 35%);
+}
+
+.action--new {
+  background: linear-gradient(180deg, var(--brass-300), var(--brass-500));
+  border-color: var(--brass-200);
+  color: #2a1d05;
+}
+
+/* --------------------------------------------------------------
+   El tapete de apuestas
+   -------------------------------------------------------------- */
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.felt {
+  padding: clamp(10px, 2vw, 16px);
+  border-radius: var(--r-lg);
+  border: 2px solid rgb(212 172 82 / 40%);
+  background:
+    linear-gradient(180deg, rgb(20 96 61 / 42%), rgb(6 40 27 / 55%));
+  box-shadow:
+    inset 0 1px 0 rgb(249 231 182 / 14%),
+    var(--shadow-lift);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.felt.is-disabled {
+  opacity: 0.62;
+}
+
+.felt__grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+}
+
+@media (min-width: 620px) {
+  .felt__grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+}
+
+.cell {
+  position: relative;
+  aspect-ratio: 1 / 1.08;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  border: 1px solid rgb(249 231 182 / 22%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 2px 4px rgb(0 0 0 / 35%);
+  transition: transform 110ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.cell--zero {
+  grid-column: span 6;
+  aspect-ratio: auto;
+  min-height: 42px;
+}
+
+@media (min-width: 620px) {
+  .cell--zero {
+    grid-column: span 12;
+    min-height: 46px;
+  }
+}
+
+.cell--red {
+  background: linear-gradient(180deg, var(--red-500), var(--red-700));
+}
+
+.cell--black {
+  background: linear-gradient(180deg, var(--black-500), var(--black-700));
+}
+
+.cell__digit {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(0.95rem, 2.4vw, 1.15rem);
+  color: #fbf4e6;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 65%);
+}
+
+.cell:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--brass-200);
+  box-shadow: 0 0 0 1px rgb(237 207 133 / 55%), 0 8px 16px rgb(0 0 0 / 45%);
+}
+
+.cell.is-picked {
+  border-color: var(--brass-100);
+  box-shadow: 0 0 0 2px var(--brass-200), 0 0 22px rgb(237 207 133 / 45%);
+}
+
+.cell:disabled {
+  cursor: not-allowed;
+}
+
+.felt__colors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.block {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 12px;
+  cursor: pointer;
+  border-radius: var(--r-md);
+  border: 1px solid rgb(249 231 182 / 25%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 4px 10px rgb(0 0 0 / 40%);
+  transition: transform 110ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.block--red {
+  background: linear-gradient(180deg, var(--red-500), var(--red-700));
+}
+
+.block--black {
+  background: linear-gradient(180deg, var(--black-500), var(--black-700));
+}
+
+.block__lozenge {
+  width: 16px;
+  height: 22px;
+  rotate: 45deg;
+  border-radius: 3px;
+  border: 1px solid rgb(255 255 255 / 45%);
+  background: rgb(255 255 255 / 12%);
+}
+
+.block__name {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.03em;
+  color: #fbf4e6;
+}
+
+.block__odds {
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  color: rgb(251 244 230 / 68%);
+}
+
+.block:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--brass-200);
+}
+
+.block.is-picked {
+  border-color: var(--brass-100);
+  box-shadow: 0 0 0 2px var(--brass-200), 0 0 26px rgb(237 207 133 / 40%);
+}
+
+.block:disabled {
+  cursor: not-allowed;
+}
+
+/* Fichas apiladas sobre la casilla */
+
+.stack {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+}
+
+.stack__chip {
+  position: absolute;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  box-shadow: var(--shadow-chip);
+  animation: chip-drop 320ms cubic-bezier(0.2, 1.5, 0.4, 1) 1;
+}
+
+@keyframes chip-drop {
+  from {
+    transform: translateY(-18px) scale(1.25);
+    opacity: 0;
+  }
+
+  70% {
+    transform: translateY(2px) scale(0.97);
+    opacity: 1;
+  }
+
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* --------------------------------------------------------------
+   Riel de fichas
+   -------------------------------------------------------------- */
+
+.rail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid rgb(212 172 82 / 26%);
+  background: linear-gradient(180deg, rgb(8 44 30 / 78%), rgb(4 24 16 / 88%));
+  box-shadow: inset 0 1px 0 rgb(249 231 182 / 12%);
+}
+
+.rail__chips {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  position: relative;
+  width: clamp(46px, 11vw, 56px);
+  height: clamp(46px, 11vw, 56px);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow-chip), inset 0 -3px 6px rgb(0 0 0 / 45%);
+  transition: transform 130ms cubic-bezier(0.2, 1.4, 0.4, 1), filter 130ms ease;
+}
+
+.chip__face {
+  display: grid;
+  place-items: center;
+  width: 66%;
+  height: 66%;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 92%);
+  color: #1a1206;
+  font-weight: 700;
+  font-size: 0.86rem;
+  letter-spacing: -0.01em;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
+}
+
+.chip:hover:not(:disabled) {
+  transform: translateY(-4px) rotate(-4deg);
+  filter: brightness(1.08);
+}
+
+.chip:active:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.chip:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Cada denominación con su color y sus marcas de canto. */
+.chip--5,
+.stack__chip.chip--5 {
+  background:
+    repeating-conic-gradient(#fdf6ea 0deg 18deg, #b8202b 18deg 36deg);
+}
+
+.chip--25,
+.stack__chip.chip--25 {
+  background:
+    repeating-conic-gradient(#fdf6ea 0deg 18deg, #12784c 18deg 36deg);
+}
+
+.chip--100,
+.stack__chip.chip--100 {
+  background:
+    repeating-conic-gradient(#fdf6ea 0deg 18deg, #1b1a1e 18deg 36deg);
+}
+
+.chip--500,
+.stack__chip.chip--500 {
+  background:
+    repeating-conic-gradient(#fdf6ea 0deg 18deg, #5b2a86 18deg 36deg);
+}
+
+.chip--1000,
+.stack__chip.chip--1000 {
+  background:
+    repeating-conic-gradient(#fff6dd 0deg 18deg, #c08a1c 18deg 36deg);
+}
+
+.chip--odd,
+.stack__chip.chip--odd {
+  background: repeating-conic-gradient(#fdf6ea 0deg 18deg, #6b6357 18deg 36deg);
+}
+
+.rail__side {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.rail__total {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.rail__total-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bone-dim);
+}
+
+.rail__total-value {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(1.3rem, 3.4vw, 1.7rem);
+  color: var(--brass-100);
+}
+
+.rail__tools {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  color: var(--bone-dim);
+  background: transparent;
+  border: 1px solid rgb(212 172 82 / 28%);
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.ghost:hover:not(:disabled) {
+  color: var(--brass-100);
+  border-color: var(--brass-300);
+}
+
+.ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.rail__exact {
+  flex-basis: 100%;
+}
+
+.rail__exact input {
+  width: 100%;
+  max-width: 220px;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgb(212 172 82 / 32%);
+  background: rgb(0 0 0 / 35%);
+}
+
+.rail__exact input::placeholder {
+  color: var(--bone-faint);
+}
+
+/* --------------------------------------------------------------
+   Barra de apuesta
+   -------------------------------------------------------------- */
+
+.place {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.place__go {
+  width: 100%;
+  padding: 15px 20px;
+  cursor: pointer;
+  border-radius: var(--r-md);
+  border: 1px solid var(--brass-200);
+  background: linear-gradient(180deg, var(--brass-200), var(--brass-400));
+  color: #241803;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(1.05rem, 3vw, 1.3rem);
+  letter-spacing: 0.04em;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 45%);
+  transition: filter 140ms ease, transform 90ms ease;
+}
+
+.place__go:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+
+.place__go:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.place__go:disabled {
+  cursor: not-allowed;
+  color: var(--bone-dim);
+  background: rgb(8 44 30 / 70%);
+  border-color: rgb(212 172 82 / 26%);
+  box-shadow: none;
+}
+
+.place__error {
+  color: var(--loss);
+  font-size: 0.85rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stack__chip,
+  .wheel__result {
+    animation: none;
+  }
+
+  .cell,
+  .block,
+  .chip,
+  .action,
+  .plaque,
+  .place__go {
+    transition: none;
+  }
+}

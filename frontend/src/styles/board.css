@@ -1,0 +1,348 @@
+/* --------------------------------------------------------------
+   Marcador de pagos
+   -------------------------------------------------------------- */
+
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: clamp(12px, 2vw, 18px);
+  border-radius: var(--r-md);
+  border: 1px solid rgb(212 172 82 / 34%);
+  background: linear-gradient(180deg, rgb(6 34 23 / 88%), rgb(3 18 12 / 92%));
+  box-shadow: var(--shadow-lift);
+  animation: board-in 420ms ease-out 1;
+}
+
+@keyframes board-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.board__totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgb(212 172 82 / 20%);
+}
+
+.board__stat {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.board__stat-label {
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bone-dim);
+}
+
+.board__stat-value {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(1.15rem, 3vw, 1.55rem);
+  color: var(--bone);
+}
+
+.board__stat--paid .board__stat-value {
+  color: var(--brass-100);
+}
+
+.board__empty {
+  color: var(--bone-dim);
+  font-size: 0.9rem;
+}
+
+.board__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'who pick net'
+    'amount amount payout';
+  gap: 4px 10px;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  border-left: 1px solid transparent;
+  background: rgb(255 255 255 / 3%);
+}
+
+@media (min-width: 560px) {
+  .line {
+    grid-template-columns: minmax(0, 1fr) 84px 110px 110px 110px;
+    grid-template-areas: 'who pick amount payout net';
+  }
+}
+
+.line--won {
+  background: rgb(98 215 155 / 10%);
+  border-left-color: var(--win);
+}
+
+.line--lost {
+  opacity: 0.62;
+}
+
+.line__who {
+  grid-area: who;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line__pick {
+  grid-area: pick;
+}
+
+.line__amount {
+  grid-area: amount;
+  color: var(--bone-dim);
+  font-size: 0.88rem;
+}
+
+.line__payout {
+  grid-area: payout;
+  color: var(--brass-100);
+  font-weight: 600;
+}
+
+.line--lost .line__payout {
+  color: var(--bone-faint);
+  font-weight: 400;
+}
+
+.line__net {
+  grid-area: net;
+  font-weight: 600;
+  text-align: right;
+}
+
+@media (min-width: 560px) {
+  .line__amount,
+  .line__payout,
+  .line__net {
+    text-align: right;
+  }
+}
+
+.is-win {
+  color: var(--win);
+}
+
+.is-loss {
+  color: var(--loss);
+}
+
+/* Fichas-testigo de una apuesta */
+
+.token {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #fbf4e6;
+  border: 1px solid rgb(249 231 182 / 32%);
+}
+
+.token--red {
+  background: linear-gradient(180deg, var(--red-500), var(--red-700));
+}
+
+.token--black {
+  background: linear-gradient(180deg, var(--black-500), var(--black-700));
+}
+
+/* Apuestas en juego, en el borde del tapete */
+
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.strip__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 5px;
+  border-radius: 999px;
+  background: rgb(4 24 16 / 75%);
+  border: 1px solid rgb(212 172 82 / 24%);
+  font-size: 0.82rem;
+}
+
+.strip__amount {
+  color: var(--brass-100);
+  font-weight: 600;
+}
+
+.strip__who {
+  color: var(--bone-dim);
+  max-width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------
+   Avisos
+   -------------------------------------------------------------- */
+
+.toasts {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: 18px;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(94vw, 460px);
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: var(--r-sm);
+  font-size: 0.88rem;
+  box-shadow: var(--shadow-lift);
+  animation: toast-in 260ms ease-out 1;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.toast--error {
+  background: linear-gradient(180deg, #5d1015, #380a0d);
+  border: 1px solid #e2606a;
+  color: #ffe4e5;
+}
+
+.toast--win {
+  background: linear-gradient(180deg, #4d3a0c, #2b2007);
+  border: 1px solid var(--brass-300);
+  color: var(--brass-100);
+}
+
+.toast__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  opacity: 0.7;
+  flex: none;
+}
+
+.toast__close:hover {
+  opacity: 1;
+}
+
+/* --------------------------------------------------------------
+   Pista de la regla de paridad
+   -------------------------------------------------------------- */
+
+.tip {
+  position: relative;
+  display: inline-flex;
+}
+
+.tip__button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--brass-200);
+  background: transparent;
+  border: 1px solid rgb(212 172 82 / 40%);
+}
+
+.tip__button:hover {
+  color: var(--brass-100);
+  border-color: var(--brass-200);
+}
+
+.tip__bubble {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  width: min(74vw, 268px);
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: #0a1f16;
+  border: 1px solid var(--brass-400);
+  box-shadow: var(--shadow-lift);
+  color: var(--bone);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition: opacity 150ms ease, transform 150ms ease, visibility 150ms;
+}
+
+.tip:hover .tip__bubble,
+.tip__button:focus-visible + .tip__bubble {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
+
+.tip__red {
+  color: #ff8a90;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.tip__black {
+  color: #cfd6cf;
+  font-style: normal;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board,
+  .toast {
+    animation: none;
+  }
+
+  .tip__bubble {
+    transition: none;
+  }
+}

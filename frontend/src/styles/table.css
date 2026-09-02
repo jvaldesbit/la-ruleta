@@ -6,12 +6,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: 26px;
 }
 
 .wheel {
   position: relative;
-  width: min(100%, 340px);
+  width: min(100%, 400px);
   aspect-ratio: 1;
   filter: drop-shadow(0 22px 30px rgb(0 0 0 / 55%));
 }
@@ -422,13 +422,24 @@
 }
 
 .stack__chip {
+  --chip-body: #b8202b;
   position: absolute;
   left: 0;
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  box-shadow: var(--shadow-chip);
+  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--chip-body) 75%, white), var(--chip-body) 60%);
+  box-shadow: var(--shadow-chip), inset 0 0 0 1px rgb(0 0 0 / 30%);
   animation: chip-drop 320ms cubic-bezier(0.2, 1.5, 0.4, 1) 1;
+}
+
+.stack__chip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 11deg, #fdf6ea 0deg 14deg, transparent 14deg 45deg);
+  mask: radial-gradient(circle, transparent 0 60%, #000 61%);
 }
 
 @keyframes chip-drop {
@@ -472,36 +483,57 @@
 }
 
 .chip {
+  --chip-body: #b8202b;
+  --chip-edge: #fdf6ea;
   position: relative;
-  width: clamp(46px, 11vw, 56px);
-  height: clamp(46px, 11vw, 56px);
+  width: clamp(48px, 11vw, 58px);
+  height: clamp(48px, 11vw, 58px);
   border-radius: 50%;
   cursor: pointer;
   border: none;
   padding: 0;
   display: grid;
   place-items: center;
-  box-shadow: var(--shadow-chip), inset 0 -3px 6px rgb(0 0 0 / 45%);
+  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--chip-body) 78%, white), var(--chip-body) 62%);
+  box-shadow:
+    var(--shadow-chip),
+    inset 0 0 0 2px rgb(0 0 0 / 22%),
+    inset 0 -3px 7px rgb(0 0 0 / 42%);
   transition: transform 130ms cubic-bezier(0.2, 1.4, 0.4, 1), filter 130ms ease;
 }
 
+/* Muescas blancas del canto. */
+.chip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    from 11deg,
+    var(--chip-edge) 0deg 15deg,
+    transparent 15deg 45deg
+  );
+  mask: radial-gradient(circle, transparent 0 64%, #000 65%);
+}
+
 .chip__face {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 66%;
-  height: 66%;
+  width: 62%;
+  height: 62%;
   border-radius: 50%;
-  background: rgb(255 255 255 / 92%);
-  color: #1a1206;
+  background: radial-gradient(circle at 40% 32%, #fffdf6, #ece2cd);
+  color: #241803;
   font-weight: 700;
   font-size: 0.86rem;
   letter-spacing: -0.01em;
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 18%), 0 1px 2px rgb(0 0 0 / 35%);
 }
 
 .chip:hover:not(:disabled) {
-  transform: translateY(-4px) rotate(-4deg);
-  filter: brightness(1.08);
+  transform: translateY(-5px) rotate(-5deg);
+  filter: brightness(1.1);
 }
 
 .chip:active:not(:disabled) {
@@ -509,44 +541,33 @@
 }
 
 .chip:disabled {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-/* Cada denominación con su color y sus marcas de canto. */
-.chip--5,
-.stack__chip.chip--5 {
-  background:
-    repeating-conic-gradient(#fdf6ea 0deg 18deg, #b8202b 18deg 36deg);
+/* Denominaciones */
+.chip--5 {
+  --chip-body: #b8202b;
 }
 
-.chip--25,
-.stack__chip.chip--25 {
-  background:
-    repeating-conic-gradient(#fdf6ea 0deg 18deg, #12784c 18deg 36deg);
+.chip--25 {
+  --chip-body: #12784c;
 }
 
-.chip--100,
-.stack__chip.chip--100 {
-  background:
-    repeating-conic-gradient(#fdf6ea 0deg 18deg, #1b1a1e 18deg 36deg);
+.chip--100 {
+  --chip-body: #211f24;
 }
 
-.chip--500,
-.stack__chip.chip--500 {
-  background:
-    repeating-conic-gradient(#fdf6ea 0deg 18deg, #5b2a86 18deg 36deg);
+.chip--500 {
+  --chip-body: #5b2a86;
 }
 
-.chip--1000,
-.stack__chip.chip--1000 {
-  background:
-    repeating-conic-gradient(#fff6dd 0deg 18deg, #c08a1c 18deg 36deg);
+.chip--1000 {
+  --chip-body: #c08a1c;
 }
 
-.chip--odd,
-.stack__chip.chip--odd {
-  background: repeating-conic-gradient(#fdf6ea 0deg 18deg, #6b6357 18deg 36deg);
+.chip--odd {
+  --chip-body: #6b6357;
 }
 
 .rail__side {
